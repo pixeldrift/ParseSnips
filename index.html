@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ParseSnips - Visual Regex</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="page">
+
+  <aside class="sidebar">
+    <h1 class="logo">ParseSnips</h1>
+    <h2 class="section-title">Toolbox:</h2>
+
+    <div id="toolbox">
+      <div class="tool-group" data-group="basics">
+        <div class="block" draggable="true" data-def="literal">literal <span class="field text" data-field="text" data-placeholder="text"></span></div>
+        <div class="block" draggable="true" data-def="anyOf">any of <span class="field text" data-field="chars" data-placeholder="characters"></span></div>
+        <div class="block" draggable="true" data-def="anything">anything</div>
+        <div class="block" draggable="true" data-def="not">not</div>
+        <div class="block" draggable="true" data-def="or">or</div>
+      </div>
+
+      <div class="tool-group" data-group="case">
+        <div class="block" draggable="true" data-def="uppercase">uppercase</div>
+        <div class="block" draggable="true" data-def="lowercase">lowercase</div>
+      </div>
+
+      <div class="tool-group" data-group="quantifiers">
+        <div class="block" draggable="true" data-def="singleOcc">a single occurence of:</div>
+        <div class="block" draggable="true" data-def="exactly">exactly <span class="field number" data-field="n" data-default="1"></span> occurences of</div>
+        <div class="block" draggable="true" data-def="atLeast">at least <span class="field number" data-field="n" data-default="1"></span> or more occurences of</div>
+        <div class="block" draggable="true" data-def="upTo">up to <span class="field number" data-field="n" data-default="1"></span> occurences of</div>
+        <div class="block" draggable="true" data-def="between">between <span class="field number" data-field="n" data-default="1"></span> to <span class="field number" data-field="m" data-default="1"></span> occurences of:</div>
+        <div class="block" draggable="true" data-def="moreThan">more than <span class="field number" data-field="n" data-default="1"></span> occurences of</div>
+        <div class="block" draggable="true" data-def="fewAsPossible">as few as possible of</div>
+        <div class="block" draggable="true" data-def="manyAsPossible">as many as possible of</div>
+      </div>
+
+      <div class="tool-group" data-group="classes">
+        <div class="block" draggable="true" data-def="character">character</div>
+        <div class="block" draggable="true" data-def="letter">letter</div>
+        <div class="block" draggable="true" data-def="digit">digit</div>
+        <div class="block" draggable="true" data-def="letterOrDigit">letter or digit</div>
+        <div class="block" draggable="true" data-def="word">word</div>
+        <div class="block" draggable="true" data-def="letterRange">the letter <span class="field char" data-field="from" data-default="a"></span> through <span class="field char" data-field="to" data-default="z"></span></div>
+      </div>
+
+      <div class="tool-group" data-group="anchors">
+        <div class="block" draggable="true" data-def="fromBeginning">From the beginning</div>
+        <div class="block" draggable="true" data-def="toEnd">to the end</div>
+      </div>
+
+      <div class="tool-group" data-group="action">
+        <div class="block" draggable="true" data-def="replaceWith">Replace with: <span class="field text" data-field="text" data-placeholder="replacement"></span></div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="workbench-header">
+      <h2 class="section-title">Workbench:</h2>
+      <button id="clearWorkbench" class="clear-btn" type="button">Clear</button>
+    </div>
+    <div id="workbench" class="workbench">
+      <div class="workbench-placeholder">Drag blocks here to build your pattern</div>
+    </div>
+
+    <h2 class="section-title">Regex string:</h2>
+    <div class="regex-row">
+      <input id="regexOutput" class="regex-field" type="text" readonly placeholder="Regex code" />
+      <button id="copyBtn" class="copy-btn" type="button">Copy to Clipboard</button>
+    </div>
+
+    <h2 class="section-title">Text to Process:</h2>
+    <textarea id="textInput" class="text-box" placeholder="Paste your text here."></textarea>
+
+    <h2 class="section-title">Output text:</h2>
+    <div id="outputBox" class="text-box output-box" data-placeholder="See your results here."></div>
+
+    <h2 class="section-title">About:</h2>
+    <p class="about">
+      <strong>ParseSnips</strong> is a visually intuitive, natural language approach to generating regular expressions. No coding or
+      advanced logic necessary. Simply drag criteria blocks from your Toolbox to the Workbench in order to generate
+      your RegEx string and preview the results in real time.
+    </p>
+  </main>
+
+</div>
+<script src="script.js"></script>
+</body>
+</html>
