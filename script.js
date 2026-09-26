@@ -141,9 +141,13 @@
     }
   }
 
+  // Categories give related blocks a shared, subtle color tint (see
+  // .cat-* rules in style.css) -- purely visual, no effect on regex
+  // generation or parsing.
   const BLOCKS = {
     literal: {
       kind: "atom",
+      category: "logic",
       label: "literal {text}",
       fields: [{ name: "text", kind: "text", placeholder: "text" }],
       compute: (f) => escapeLiteral(f.text || ""),
@@ -153,66 +157,77 @@
       // of a [...] class, so ranges (a-z), escapes (\d) and everything
       // else round-trip exactly when a regex is parsed back into blocks.
       kind: "atom",
+      category: "logic",
       label: "any of {chars}",
       fields: [{ name: "chars", kind: "text", placeholder: "characters" }],
       compute: (f) => `[${f.chars || ""}]`,
     },
     anything: {
       kind: "atom",
+      category: "logic",
       label: "anything",
       fields: [],
       compute: () => ".",
     },
     uppercase: {
       kind: "atom",
+      category: "case",
       label: "uppercase",
       fields: [],
       compute: () => "[A-Z]",
     },
     lowercase: {
       kind: "atom",
+      category: "case",
       label: "lowercase",
       fields: [],
       compute: () => "[a-z]",
     },
     character: {
       kind: "atom",
+      category: "class",
       label: "character",
       fields: [],
       compute: () => ".",
     },
     letter: {
       kind: "atom",
+      category: "class",
       label: "letter",
       fields: [],
       compute: () => "[a-zA-Z]",
     },
     digit: {
       kind: "atom",
+      category: "class",
       label: "digit",
       fields: [],
       compute: () => "[0-9]",
     },
     letterOrDigit: {
       kind: "atom",
+      category: "class",
       label: "letter or digit",
       fields: [],
       compute: () => "[a-zA-Z0-9]",
     },
     word: {
       kind: "atom",
+      category: "class",
       label: "word character",
       fields: [],
       compute: () => "\\w",
     },
     whitespace: {
       kind: "atom",
+      category: "class",
       label: "whitespace",
       fields: [],
       compute: () => "\\s",
     },
     letterRange: {
       kind: "atom",
+      category: "class",
       label: "the letter {from} through {to}",
       fields: [
         { name: "from", kind: "char", default: "a" },
@@ -226,30 +241,35 @@
     },
     fromBeginning: {
       kind: "atom",
+      category: "anchor",
       label: "from the beginning",
       fields: [],
       compute: () => "^",
     },
     toEnd: {
       kind: "atom",
+      category: "anchor",
       label: "to the end",
       fields: [],
       compute: () => "$",
     },
     wordBoundary: {
       kind: "atom",
+      category: "anchor",
       label: "word boundary",
       fields: [],
       compute: () => "\\b",
     },
     notWordBoundary: {
       kind: "atom",
+      category: "anchor",
       label: "not a word boundary",
       fields: [],
       compute: () => "\\B",
     },
     replaceWith: {
       kind: "action",
+      category: "action",
       label: "replace with {text}",
       fields: [{ name: "text", kind: "text", placeholder: "replacement" }],
     },
@@ -257,48 +277,56 @@
     // -- containers: each holds a nested drop zone -----------------------
     group: {
       kind: "container",
+      category: "logic",
       label: "group:",
       childJoin: "concat",
       wrap: (inner) => (isAlreadyGrouped(inner) ? inner : `(?:${inner})`),
     },
     not: {
       kind: "container",
+      category: "logic",
       label: "not:",
       childJoin: "concat",
       wrap: (inner) => negateBase(inner),
     },
     or: {
       kind: "container",
+      category: "logic",
       label: "either:",
       childJoin: "alternate",
       wrap: (inner) => `(?:${inner})`,
     },
     lookahead: {
       kind: "container",
+      category: "lookaround",
       label: "followed by:",
       childJoin: "concat",
       wrap: (inner) => `(?=${inner})`,
     },
     notLookahead: {
       kind: "container",
+      category: "lookaround",
       label: "not followed by:",
       childJoin: "concat",
       wrap: (inner) => `(?!${inner})`,
     },
     lookbehind: {
       kind: "container",
+      category: "lookaround",
       label: "preceded by:",
       childJoin: "concat",
       wrap: (inner) => `(?<=${inner})`,
     },
     notLookbehind: {
       kind: "container",
+      category: "lookaround",
       label: "not preceded by:",
       childJoin: "concat",
       wrap: (inner) => `(?<!${inner})`,
     },
     amount: {
       kind: "container",
+      category: "quantity",
       label: "amount:",
       childJoin: "concat",
       // wrap handled specially in computeNode (needs the mode dropdown)
@@ -773,7 +801,7 @@
   function buildLeafChip(inst, isToolboxPreview) {
     const def = BLOCKS[inst.defId];
     const chip = document.createElement("div");
-    chip.className = isToolboxPreview ? "block" : "wb-chip";
+    chip.className = `${isToolboxPreview ? "block" : "wb-chip"} cat-${def.category}`;
     if (isToolboxPreview) chip.dataset.def = inst.defId;
     else chip.dataset.uid = inst.uid;
 
@@ -814,6 +842,24 @@
     }
 
     return chip;
+  }
+
+  function makeLazyToggle(inst) {
+    // A trailing control, not a word inside the sentence -- "at least 1
+    // of:" stays intact, and greedy/lazy sits after it as its own thing.
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lazy-toggle-btn";
+    const isLazy = inst.fields.lazy === "true";
+    btn.textContent = isLazy ? "lazy" : "greedy";
+    btn.title = "Toggle greedy/lazy matching";
+    btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    btn.addEventListener("click", () => {
+      inst.fields.lazy = isLazy ? "false" : "true";
+      renderWorkbench();
+      recompute();
+    });
+    return btn;
   }
 
   function renderAmountHeader(headerEl, inst) {
@@ -882,29 +928,17 @@
       );
     }
 
-    if (LAZY_TOGGLE_MODES.includes(mode)) {
-      const lazyLabel = document.createElement("label");
-      lazyLabel.className = "lazy-toggle";
-      const lazyCheckbox = document.createElement("input");
-      lazyCheckbox.type = "checkbox";
-      lazyCheckbox.checked = inst.fields.lazy === "true";
-      lazyCheckbox.addEventListener("pointerdown", (e) => e.stopPropagation());
-      lazyCheckbox.addEventListener("change", () => {
-        inst.fields.lazy = lazyCheckbox.checked ? "true" : "false";
-        recompute();
-      });
-      lazyLabel.appendChild(lazyCheckbox);
-      lazyLabel.appendChild(document.createTextNode("lazy"));
-      headerEl.appendChild(lazyLabel);
-    }
-
     headerEl.appendChild(document.createTextNode("of:"));
+
+    if (LAZY_TOGGLE_MODES.includes(mode)) {
+      headerEl.appendChild(makeLazyToggle(inst));
+    }
   }
 
   function buildContainerChip(inst) {
     const def = BLOCKS[inst.defId];
     const chip = document.createElement("div");
-    chip.className = "wb-chip container-chip";
+    chip.className = `wb-chip container-chip cat-${def.category}`;
     chip.dataset.uid = inst.uid;
 
     const header = document.createElement("div");
@@ -1310,12 +1344,12 @@
       document.execCommand("copy");
       helper.remove();
     }
-    const original = btn.textContent;
+    const original = btn.innerHTML;
     btn.classList.add("copied");
-    btn.textContent = "Copied!";
+    btn.innerHTML = btn.classList.contains("field-icon-btn") ? "&#10003;" : "Copied!";
     setTimeout(() => {
       btn.classList.remove("copied");
-      btn.textContent = original;
+      btn.innerHTML = original;
     }, 1200);
   }
 
