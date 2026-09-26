@@ -355,11 +355,32 @@
       compute: () => "\\B",
     },
     replaceWith: {
+      // An action block, not a container (it never contributes to the
+      // search pattern -- computeNode short-circuits on "action" kind
+      // before ever looking at its children) but it still holds its own
+      // drop zone: literal text and "capture group:" references can be
+      // dropped in, and computeReplacementText walks that same children
+      // array to build the actual replacement string.
       kind: "action",
       category: "action",
-      label: "replace with {text}",
+      label: "replace with:",
       icon: "⇄",
-      fields: [{ name: "text", kind: "text", placeholder: "replacement" }],
+      childJoin: "concat",
+    },
+
+    captureRef: {
+      // Emits a numbered backreference ($1, $2, ...) to another "group:"
+      // block's captured text. Only meaningful inside "replace with:" --
+      // dropped anywhere else it's inert (contributes "" to the pattern).
+      // The referenced group only becomes a real capturing "(...)" (instead
+      // of the usual non-capturing "(?:...)") once something actually
+      // references it, so plain patterns stay as uncluttered as before.
+      kind: "atom",
+      category: "action",
+      label: "capture group:",
+      icon: "$n",
+      fields: [],
+      compute: () => "",
     },
 
     matchGroup: {
@@ -483,7 +504,7 @@
     ],
     ["fromBeginning", "toEnd", "wordBoundary", "notWordBoundary"],
     ["lookahead", "notLookahead", "lookbehind", "notLookbehind"],
-    ["replaceWith"],
+    ["replaceWith", "captureRef"],
   ];
 
   // ---------------------------------------------------------------------
@@ -496,7 +517,7 @@
 
   function makeInstance(defId) {
     const def = BLOCKS[defId];
-    if (def.kind === "container") {
+    if (def.kind === "container" || defId === "replaceWith") {
       let fields;
       if (defId === "amount") {
         fields = { mode: "atLeast", n: "1", m: "1", lazy: "false", collapsed: "false" };
@@ -509,6 +530,9 @@
     }
     if (defId === "matchGroup") {
       return { uid: ++uidCounter, defId, fields: { refUid: "", expanded: "false" } };
+    }
+    if (defId === "captureRef") {
+      return { uid: ++uidCounter, defId, fields: { refUid: "" } };
     }
     const fields = {};
     (def.fields || []).forEach((f) => {
@@ -582,45 +606,144 @@
   // Regex computation (recursive tree walk)
   // ---------------------------------------------------------------------
 
-  function computeNode(inst) {
+  // uid -> 1-based capture index, for "group:" nodes actually referenced by
+  // a "capture group:" block. Rebuilt from scratch on every computeRegex()
+  // call (see assignCaptureIndices below) -- capture-worthiness isn't a
+  // property stored on the group itself, it's derived fresh each time from
+  // whatever currently references it.
+  let captureIndexMap = {};
+
+  function computeNode(inst, memo) {
     const def = BLOCKS[inst.defId];
-    if (def.kind === "atom") return def.compute(inst.fields);
-    if (def.kind === "action") return "";
+    if (def.kind === "atom") {
+      const frag = def.compute(inst.fields);
+      if (memo) memo.set(inst.uid, frag);
+      return frag;
+    }
+    if (def.kind === "action") {
+      if (memo) memo.set(inst.uid, "");
+      return "";
+    }
 
     const childFragments = (inst.children || [])
-      .map(computeNode)
+      .map((c) => computeNode(c, memo))
       .filter((f) => f !== "");
     const inner =
       def.childJoin === "alternate"
         ? childFragments.join("|")
         : childFragments.join("");
 
-    if (inner === "") return "";
-
-    if (inst.defId === "amount") {
-      const suffix = amountSuffix(inst.fields);
-      if (!suffix) return inner;
-      return (isSingleUnit(inner) ? inner : `(?:${inner})`) + suffix;
+    if (inner === "") {
+      if (memo) memo.set(inst.uid, "");
+      return "";
     }
 
-    // An alternation with only one surviving branch isn't really an
-    // alternation (yet) -- don't wrap it in a redundant group.
-    if (inst.defId === "or" && childFragments.length <= 1) return inner;
+    let result;
+    if (inst.defId === "amount") {
+      const suffix = amountSuffix(inst.fields);
+      result = !suffix ? inner : (isSingleUnit(inner) ? inner : `(?:${inner})`) + suffix;
+    } else if (inst.defId === "group") {
+      // A group only gets real capturing parens once something actually
+      // backreferences it (see assignCaptureIndices) -- otherwise it stays
+      // the usual non-capturing "(?:...)" (or reuses inner's own parens).
+      const capIndex = captureIndexMap[inst.uid];
+      result = capIndex
+        ? `(${inner})`
+        : isAlreadyGrouped(inner)
+        ? inner
+        : `(?:${inner})`;
+    } else if (inst.defId === "or" && childFragments.length <= 1) {
+      // An alternation with only one surviving branch isn't really an
+      // alternation (yet) -- don't wrap it in a redundant group.
+      result = inner;
+    } else {
+      result = def.wrap(inner, inst.fields);
+    }
 
-    return def.wrap(inner, inst.fields);
+    if (memo) memo.set(inst.uid, result);
+    return result;
+  }
+
+  // Every "capture group:" block anywhere in the tree (they only make
+  // sense inside "replace with:", but nothing stops one being dropped
+  // elsewhere) names a group uid it wants to backreference.
+  function collectCaptureRefTargets(list, into) {
+    into = into || new Set();
+    for (const inst of list) {
+      if (inst.defId === "captureRef" && inst.fields.refUid) {
+        const uid = parseInt(inst.fields.refUid, 10);
+        if (uid) into.add(uid);
+      }
+      if (inst.children) collectCaptureRefTargets(inst.children, into);
+    }
+    return into;
+  }
+
+  // Real regex capture numbering is assigned left-to-right by the position
+  // of each group's opening "(" in the final pattern text -- i.e. a
+  // pre-order walk (parent before children), and skipping any group whose
+  // fragment came out empty (it was pruned entirely, so its "(" never
+  // actually appears). `fragmentByUid` comes from a first computeNode pass
+  // (with captureIndexMap still empty) -- capturing vs. non-capturing only
+  // changes "(?:" to "(", never whether a fragment is empty, so that first
+  // pass's emptiness results stay valid once capturing is applied.
+  function assignCaptureIndices(list, fragmentByUid, capturingUids) {
+    let next = 1;
+    function walk(nodes) {
+      for (const inst of nodes) {
+        if (
+          inst.defId === "group" &&
+          capturingUids.has(inst.uid) &&
+          fragmentByUid.get(inst.uid)
+        ) {
+          captureIndexMap[inst.uid] = next++;
+        }
+        if (inst.children) walk(inst.children);
+      }
+    }
+    walk(list);
+  }
+
+  function computeReplacementNode(inst) {
+    if (inst.defId === "literal") {
+      return (inst.fields.text || "").replace(/\$/g, "$$$$");
+    }
+    if (inst.defId === "captureRef") {
+      const idx = captureIndexMap[parseInt(inst.fields.refUid, 10)];
+      return idx ? "$" + idx : "";
+    }
+    // Anything else dropped into "replace with:" doesn't make sense as
+    // literal replacement text -- ignore it rather than crash.
+    return "";
+  }
+
+  function computeReplacementText(actionInst) {
+    return (actionInst.children || []).map(computeReplacementNode).join("");
   }
 
   function computeRegex(list) {
     matchGroupResolutionStack = [];
+    captureIndexMap = {};
+
+    // Pass 1: find which nodes actually survive into non-empty fragments,
+    // with every group still provisionally non-capturing.
+    const fragmentByUid = new Map();
+    list.forEach((n) => computeNode(n, fragmentByUid));
+
+    const capturingUids = collectCaptureRefTargets(list);
+    assignCaptureIndices(list, fragmentByUid, capturingUids);
+
+    // Pass 2: recompute now that captureIndexMap says which groups need
+    // real "(...)" parens instead of "(?:...)".
     const pattern = list
-      .map(computeNode)
+      .map((n) => computeNode(n))
       .filter((f) => f !== "")
       .join("");
 
     let replacement = null;
     const actionInst = findAction(list);
     if (actionInst) {
-      replacement = (actionInst.fields.text || "").replace(/\$/g, "$$$$");
+      replacement = computeReplacementText(actionInst);
     }
 
     return { pattern, replacement };
@@ -906,7 +1029,6 @@
   const rebuildBtn = document.getElementById("rebuildBtn");
   const regexParseErrorEl = document.getElementById("regexParseError");
   const clearBtn = document.getElementById("clearWorkbench");
-  const ignoreCaseEl = document.getElementById("ignoreCase");
   const bookmarksBoxEl = document.getElementById("bookmarksBox");
   const bookmarkBtn = document.getElementById("bookmarkBtn");
   const outputModeSwitchEl = document.getElementById("outputModeSwitch");
@@ -1312,10 +1434,52 @@
     return chip;
   }
 
+  function buildCaptureRefChip(inst) {
+    const chip = document.createElement("div");
+    chip.className = "wb-chip cat-action";
+    chip.dataset.uid = inst.uid;
+
+    const icon = makeBlockIcon("captureRef");
+    if (icon) chip.appendChild(icon);
+    chip.appendChild(document.createTextNode("capture group:"));
+
+    const select = document.createElement("select");
+    select.className = "amount-mode-select";
+    const placeholderOpt = document.createElement("option");
+    placeholderOpt.value = "";
+    placeholderOpt.textContent = "— choose —";
+    select.appendChild(placeholderOpt);
+    listNamedGroups(workbenchState).forEach((g) => {
+      const opt = document.createElement("option");
+      opt.value = String(g.uid);
+      opt.textContent = g.fields.name;
+      if (inst.fields.refUid === String(g.uid)) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener("pointerdown", (e) => e.stopPropagation());
+    select.addEventListener("change", () => {
+      inst.fields.refUid = select.value;
+      recompute();
+    });
+    chip.appendChild(select);
+
+    chip.appendChild(
+      makeRemoveButton(() => {
+        const loc = findParentArrayAndIndex(workbenchState, inst.uid);
+        if (loc) loc.array.splice(loc.index, 1);
+        renderWorkbench();
+        recompute();
+      })
+    );
+
+    return chip;
+  }
+
   function renderNode(inst) {
     const def = BLOCKS[inst.defId];
     if (inst.defId === "matchGroup") return buildMatchGroupChip(inst);
-    if (def.kind === "container") return buildContainerChip(inst);
+    if (inst.defId === "captureRef") return buildCaptureRefChip(inst);
+    if (def.kind === "container" || inst.defId === "replaceWith") return buildContainerChip(inst);
     return buildLeafChip(inst, false);
   }
 
@@ -1361,6 +1525,10 @@
     { name: "Phone number", pattern: "\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}" },
     { name: "Date (MM/DD/YYYY)", pattern: "\\d{1,2}/\\d{1,2}/\\d{4}" },
     { name: "ZIP code", pattern: "\\d{5}(?:-\\d{4})?" },
+    {
+      name: "HTML tags",
+      pattern: "</?[a-zA-Z][a-zA-Z0-9]*(?:\\s+[a-zA-Z][a-zA-Z0-9-]*(?:=\"[^\"]*\")?)*\\s*/?>",
+    },
   ];
 
   function makeSeedBookmark(name, patternText) {
@@ -1556,7 +1724,7 @@
       return;
     }
 
-    const flags = "gm" + (ignoreCaseEl.checked ? "i" : "");
+    const flags = "gm";
     let re;
     try {
       re = new RegExp(result.pattern, flags);
@@ -1888,7 +2056,6 @@
   });
 
   textInputEl.addEventListener("input", recompute);
-  ignoreCaseEl.addEventListener("change", recompute);
 
   outputModeSwitchEl.querySelectorAll(".output-mode-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
