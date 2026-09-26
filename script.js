@@ -126,7 +126,7 @@
     const label = mode ? mode.label : fields.mode;
     const lazySuffix =
       fields.lazy === "true" && LAZY_TOGGLE_MODES.includes(fields.mode)
-        ? ", lazy"
+        ? ", minimal match"
         : "";
     switch (fields.mode) {
       case "exactly":
@@ -844,22 +844,49 @@
     return chip;
   }
 
-  function makeLazyToggle(inst) {
-    // A trailing control, not a word inside the sentence -- "at least 1
-    // of:" stays intact, and greedy/lazy sits after it as its own thing.
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "lazy-toggle-btn";
+  function makeGreedyLazyToggle(inst) {
+    // A separate row below the drop zone -- not part of the header
+    // sentence at all -- with a little switch between the two labels.
+    // The switch's arrow points at whichever side is active, and that
+    // side's label is bold; the other is faded.
     const isLazy = inst.fields.lazy === "true";
-    btn.textContent = isLazy ? "lazy" : "greedy";
-    btn.title = "Toggle greedy/lazy matching";
-    btn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    btn.addEventListener("click", () => {
-      inst.fields.lazy = isLazy ? "false" : "true";
+
+    function setLazy(val) {
+      inst.fields.lazy = val ? "true" : "false";
       renderWorkbench();
       recompute();
-    });
-    return btn;
+    }
+
+    const row = document.createElement("div");
+    row.className = "greedy-toggle";
+
+    const lazyLabel = document.createElement("span");
+    lazyLabel.className = "greedy-toggle-label" + (isLazy ? " active" : "");
+    lazyLabel.textContent = "as little as possible";
+    lazyLabel.addEventListener("pointerdown", (e) => e.stopPropagation());
+    lazyLabel.addEventListener("click", () => setLazy(true));
+
+    const switchBtn = document.createElement("button");
+    switchBtn.type = "button";
+    switchBtn.className = "greedy-toggle-switch " + (isLazy ? "state-lazy" : "state-greedy");
+    switchBtn.title = "Toggle minimal/maximal matching";
+    switchBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    switchBtn.addEventListener("click", () => setLazy(!isLazy));
+    const arrow = document.createElement("span");
+    arrow.className = "greedy-toggle-arrow";
+    arrow.textContent = isLazy ? "◀" : "▶";
+    switchBtn.appendChild(arrow);
+
+    const greedyLabel = document.createElement("span");
+    greedyLabel.className = "greedy-toggle-label" + (!isLazy ? " active" : "");
+    greedyLabel.textContent = "as much as possible";
+    greedyLabel.addEventListener("pointerdown", (e) => e.stopPropagation());
+    greedyLabel.addEventListener("click", () => setLazy(false));
+
+    row.appendChild(lazyLabel);
+    row.appendChild(switchBtn);
+    row.appendChild(greedyLabel);
+    return row;
   }
 
   function renderAmountHeader(headerEl, inst) {
@@ -929,10 +956,6 @@
     }
 
     headerEl.appendChild(document.createTextNode("of:"));
-
-    if (LAZY_TOGGLE_MODES.includes(mode)) {
-      headerEl.appendChild(makeLazyToggle(inst));
-    }
   }
 
   function buildContainerChip(inst) {
@@ -970,6 +993,10 @@
       inst.children.forEach((child) => dropzone.appendChild(renderNode(child)));
     }
     chip.appendChild(dropzone);
+
+    if (inst.defId === "amount" && LAZY_TOGGLE_MODES.includes(inst.fields.mode)) {
+      chip.appendChild(makeGreedyLazyToggle(inst));
+    }
 
     return chip;
   }

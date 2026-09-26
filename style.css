@@ -363,23 +363,63 @@ input.field-input.char-input {
   color: #333;
 }
 
-/* Sits after "...of:" with a flexible gap pushing it to the row's end,
-   so it reads as a separate trailing control rather than a word stuck
-   in the middle of the quantifier's sentence. */
-.lazy-toggle-btn {
-  margin-left: auto;
-  border: 1px solid #bbb;
-  background: #fff;
-  border-radius: 10px;
-  padding: 1px 9px;
-  font-size: 11px;
-  font-style: italic;
-  color: #777;
-  cursor: pointer;
+/* A separate row below the drop zone (not part of the header sentence
+   at all): [as little as possible] [switch] [as much as possible],
+   with the active side bold and the inactive side faded, and the
+   switch's arrow pointing at whichever side is active. */
+.greedy-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 2px;
 }
 
-.lazy-toggle-btn:hover {
-  background: #f0f0f0;
+.greedy-toggle-label {
+  font-size: 11px;
+  color: #aaa;
+  font-weight: 400;
+  cursor: pointer;
+  transition: color 0.15s, font-weight 0.15s;
+}
+
+.greedy-toggle-label.active {
+  color: #333;
+  font-weight: 700;
+}
+
+.greedy-toggle-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 17px;
+  border: 1px solid #bbb;
+  border-radius: 9px;
+  background: #eee;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  padding: 0;
+}
+
+.greedy-toggle-arrow {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  line-height: 12px;
+  text-align: center;
+  font-size: 9px;
+  color: #777;
+  transform: translateY(-50%);
+  transition: left 0.15s ease;
+}
+
+.greedy-toggle-switch.state-lazy .greedy-toggle-arrow {
+  left: 3px;
+}
+
+.greedy-toggle-switch.state-greedy .greedy-toggle-arrow {
+  left: 17px;
 }
 
 @media (pointer: coarse) {
@@ -412,9 +452,29 @@ input.field-input.char-input {
     padding: 10px;
   }
 
-  .lazy-toggle-btn {
+  .greedy-toggle-label {
     font-size: 13px;
-    padding: 3px 11px;
+  }
+
+  .greedy-toggle-switch {
+    width: 40px;
+    height: 22px;
+    border-radius: 11px;
+  }
+
+  .greedy-toggle-arrow {
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    font-size: 11px;
+  }
+
+  .greedy-toggle-switch.state-lazy .greedy-toggle-arrow {
+    left: 3px;
+  }
+
+  .greedy-toggle-switch.state-greedy .greedy-toggle-arrow {
+    left: 21px;
   }
 }
 
