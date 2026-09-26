@@ -75,8 +75,6 @@
     { value: "upTo", label: "up to" },
     { value: "between", label: "between" },
     { value: "moreThan", label: "more than" },
-    { value: "few", label: "as few as possible" },
-    { value: "many", label: "as many as possible" },
   ];
 
   // Modes whose suffix has an inherent greedy/lazy distinction of its own
@@ -108,10 +106,6 @@
       case "moreThan":
         suffix = `{${n + 1},}`;
         break;
-      case "few":
-        return "*?";
-      case "many":
-        return "*";
       default:
         return "";
     }
@@ -415,6 +409,28 @@
     return null;
   }
 
+  function cloneTree(node) {
+    const clone = { uid: ++uidCounter, defId: node.defId, fields: { ...node.fields } };
+    if (node.children) clone.children = node.children.map(cloneTree);
+    return clone;
+  }
+
+  // A bookmark is always a single named "group:" node. Saving something
+  // that isn't already exactly one group wraps it in a new one; saving
+  // an existing group reuses it (so a bookmark's name survives being
+  // dragged back into the workbench and re-saved).
+  function wrapForBookmark(sourceNodes) {
+    if (sourceNodes.length === 1 && sourceNodes[0].defId === "group") {
+      return cloneTree(sourceNodes[0]);
+    }
+    return {
+      uid: ++uidCounter,
+      defId: "group",
+      fields: { name: "" },
+      children: sourceNodes.map(cloneTree),
+    };
+  }
+
   // ---------------------------------------------------------------------
   // Regex computation (recursive tree walk)
   // ---------------------------------------------------------------------
@@ -563,7 +579,7 @@
       let fields = null;
       if (c === "*") {
         i++;
-        fields = { mode: "many" };
+        fields = { mode: "atLeast", n: "0" };
       } else if (c === "+") {
         i++;
         fields = { mode: "atLeast", n: "1" };
@@ -585,11 +601,7 @@
         i++;
         lazy = true;
       }
-      if (fields.mode === "many" && lazy) {
-        fields.mode = "few";
-      } else {
-        fields.lazy = lazy ? "true" : "false";
-      }
+      fields.lazy = lazy ? "true" : "false";
       return fields;
     }
 
@@ -746,6 +758,8 @@
   const regexParseErrorEl = document.getElementById("regexParseError");
   const clearBtn = document.getElementById("clearWorkbench");
   const ignoreCaseEl = document.getElementById("ignoreCase");
+  const bookmarksBoxEl = document.getElementById("bookmarksBox");
+  const bookmarkBtn = document.getElementById("bookmarkBtn");
 
   workbenchEl.classList.add("dropzone");
   workbenchEl.dataset.owner = "root";
@@ -1021,6 +1035,7 @@
 
   function renderWorkbench() {
     workbenchEl.innerHTML = "";
+    bookmarkBtn.disabled = workbenchState.length === 0;
     if (workbenchState.length === 0) {
       const placeholder = document.createElement("div");
       placeholder.className = "workbench-placeholder";
@@ -1029,6 +1044,157 @@
       return;
     }
     workbenchState.forEach((inst) => workbenchEl.appendChild(renderNode(inst)));
+  }
+
+  // ---------------------------------------------------------------------
+  // Saved Patterns (bookmarks): named, reusable snippets. Each one is a
+  // single "group:" node plus a frozen snapshot of the regex text it
+  // produced at save time. Behaves like a second toolbox: drag or tap an
+  // entry to drop a fresh clone of it into the workbench.
+  // ---------------------------------------------------------------------
+
+  let bookmarks = [];
+  let bookmarkUidCounter = 0;
+  let bookmarkNameCounter = 0;
+
+  const SEED_BOOKMARKS = [
+    { name: "Email address", pattern: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}" },
+    { name: "URL", pattern: "https?://[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}(?:/[^\\s]*)?" },
+    { name: "Phone number", pattern: "\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}" },
+    { name: "Date (MM/DD/YYYY)", pattern: "\\d{1,2}/\\d{1,2}/\\d{4}" },
+    { name: "ZIP code", pattern: "\\d{5}(?:-\\d{4})?" },
+  ];
+
+  function makeSeedBookmark(name, patternText) {
+    const groupNode = wrapForBookmark(parseRegexToNodes(patternText));
+    groupNode.fields.name = name;
+    return {
+      id: ++bookmarkUidCounter,
+      name,
+      pattern: computeNode(groupNode),
+      tree: groupNode,
+    };
+  }
+
+  bookmarks = SEED_BOOKMARKS.map((s) => makeSeedBookmark(s.name, s.pattern));
+
+  function nextDefaultBookmarkName() {
+    bookmarkNameCounter += 1;
+    return `Saved pattern ${String(bookmarkNameCounter).padStart(2, "0")}`;
+  }
+
+  function buildBookmarkChip(bm) {
+    const chip = document.createElement("div");
+    chip.className = "bookmark-chip cat-bookmark";
+    chip.dataset.bookmarkId = bm.id;
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "bookmark-name-input";
+    nameInput.value = bm.name;
+    nameInput.addEventListener("pointerdown", (e) => e.stopPropagation());
+    nameInput.addEventListener("input", () => {
+      bm.name = nameInput.value;
+      bm.tree.fields.name = nameInput.value;
+    });
+    chip.appendChild(nameInput);
+
+    const caption = document.createElement("div");
+    caption.className = "bookmark-pattern-caption";
+    caption.textContent = bm.pattern;
+    chip.appendChild(caption);
+
+    chip.appendChild(
+      makeRemoveButton(() => {
+        bookmarks = bookmarks.filter((x) => x.id !== bm.id);
+        renderBookmarks();
+      })
+    );
+
+    return chip;
+  }
+
+  function renderBookmarks() {
+    bookmarksBoxEl.innerHTML = "";
+    if (bookmarks.length === 0) {
+      const hint = document.createElement("div");
+      hint.className = "bookmarks-empty-hint";
+      hint.textContent = "Save a pattern to see it here";
+      bookmarksBoxEl.appendChild(hint);
+      return;
+    }
+    bookmarks.forEach((bm) => bookmarksBoxEl.appendChild(buildBookmarkChip(bm)));
+  }
+
+  function focusBookmarkName(id) {
+    const input = bookmarksBoxEl.querySelector(
+      `.bookmark-chip[data-bookmark-id="${id}"] .bookmark-name-input`
+    );
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+
+  function flyToBookmarks(originRect, onComplete) {
+    if (!originRect) {
+      onComplete();
+      return;
+    }
+    const targetRect = bookmarksBoxEl.getBoundingClientRect();
+    const ghost = document.createElement("div");
+    ghost.className = "block cat-logic bookmark-fly-ghost";
+    ghost.textContent = "group:";
+    ghost.style.left = originRect.left + "px";
+    ghost.style.top = originRect.top + "px";
+    ghost.style.width = (originRect.width || 60) + "px";
+    ghost.style.height = (originRect.height || 28) + "px";
+    document.body.appendChild(ghost);
+
+    const endX = targetRect.left + targetRect.width / 2 - 8;
+    const endY = targetRect.top + 8;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ghost.style.left = endX + "px";
+        ghost.style.top = endY + "px";
+        ghost.style.width = "16px";
+        ghost.style.height = "16px";
+        ghost.style.fontSize = "0px";
+        ghost.style.opacity = "0";
+      });
+    });
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      ghost.remove();
+      onComplete();
+    };
+    ghost.addEventListener("transitionend", finish, { once: true });
+    setTimeout(finish, 650);
+  }
+
+  function saveBookmark(sourceNodes, originRect) {
+    if (!sourceNodes || sourceNodes.length === 0) return;
+    const groupNode = wrapForBookmark(sourceNodes);
+    const pattern = computeNode(groupNode);
+    const hadName = !!(groupNode.fields.name && groupNode.fields.name.trim());
+    if (!hadName) groupNode.fields.name = nextDefaultBookmarkName();
+
+    const entry = {
+      id: ++bookmarkUidCounter,
+      name: groupNode.fields.name,
+      pattern,
+      tree: groupNode,
+    };
+
+    flyToBookmarks(originRect, () => {
+      bookmarks.push(entry);
+      renderBookmarks();
+      if (!hadName) focusBookmarkName(entry.id);
+    });
   }
 
   function recompute() {
@@ -1122,9 +1288,10 @@
   const TAP_THRESHOLD_PX = 8;
 
   let dragGhost = null;
-  let dragMode = null; // 'new' | 'move'
+  let dragMode = null; // 'new' | 'move' | 'bookmark'
   let dragDefId = null;
   let dragUid = null;
+  let dragBookmarkId = null;
   let dragSourceEl = null;
   let dragStartX = 0;
   let dragStartY = 0;
@@ -1188,6 +1355,12 @@
     return el.closest(".dropzone");
   }
 
+  function resolveBookmarksBox(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    return el.closest("#bookmarksBox");
+  }
+
   function dragGhostLabel(defId) {
     if (defId === "amount") return "amount";
     return BLOCKS[defId].label.replace(/\{(\w+)\}/g, "___").replace(/:$/, "");
@@ -1202,10 +1375,14 @@
     dragMoved = false;
     activePointerId = e.pointerId;
 
-    let defId;
+    let ghostLabel;
     if (mode === "new") {
       dragDefId = payload;
-      defId = payload;
+      ghostLabel = dragGhostLabel(payload);
+    } else if (mode === "bookmark") {
+      dragBookmarkId = payload;
+      const bm = bookmarks.find((b) => b.id === payload);
+      ghostLabel = bm ? bm.name : "pattern";
     } else {
       dragUid = payload;
       dragSourceEl = document.querySelector(`.wb-chip[data-uid="${payload}"]`);
@@ -1214,12 +1391,12 @@
         dragSourceEl.style.pointerEvents = "none";
       }
       const inst = findInstanceByUid(workbenchState, payload);
-      defId = inst.defId;
+      ghostLabel = dragGhostLabel(inst.defId);
     }
 
     dragGhost = document.createElement("div");
     dragGhost.className = "drag-ghost block";
-    dragGhost.textContent = dragGhostLabel(defId);
+    dragGhost.textContent = ghostLabel;
     document.body.appendChild(dragGhost);
     moveGhost(e);
 
@@ -1247,7 +1424,11 @@
     document
       .querySelectorAll(".dropzone.drag-over")
       .forEach((el) => el.classList.remove("drag-over"));
+    bookmarksBoxEl.classList.remove("drag-over-bookmarks");
     if (dz) dz.classList.add("drag-over");
+    else if (dragMode === "move" && resolveBookmarksBox(e.clientX, e.clientY)) {
+      bookmarksBoxEl.classList.add("drag-over-bookmarks");
+    }
   }
 
   function endDragCleanup() {
@@ -1257,6 +1438,7 @@
     document
       .querySelectorAll(".dropzone.drag-over")
       .forEach((el) => el.classList.remove("drag-over"));
+    bookmarksBoxEl.classList.remove("drag-over-bookmarks");
     if (dragGhost) {
       dragGhost.remove();
       dragGhost = null;
@@ -1268,6 +1450,7 @@
     dragMode = null;
     dragDefId = null;
     dragUid = null;
+    dragBookmarkId = null;
     dragSourceEl = null;
     activePointerId = null;
   }
@@ -1279,7 +1462,7 @@
     const isTap = !dragMoved;
     let dz = resolveDropzone(e.clientX, e.clientY);
 
-    if (mode === "new") {
+    if (mode === "new" || mode === "bookmark") {
       // A tap with no movement always appends to the root workbench --
       // easier to hit than the workbench's exact bounds on a phone.
       if (isTap && !dz) dz = workbenchEl;
@@ -1291,11 +1474,20 @@
         const insertIndex = isTap && dz === workbenchEl
           ? targetArray.length
           : computeInsertIndex(dz, e.clientX, e.clientY);
-        targetArray.splice(insertIndex, 0, makeInstance(dragDefId));
+        if (mode === "new") {
+          targetArray.splice(insertIndex, 0, makeInstance(dragDefId));
+        } else {
+          const bm = bookmarks.find((b) => b.id === dragBookmarkId);
+          if (bm) targetArray.splice(insertIndex, 0, cloneTree(bm.tree));
+        }
       }
     } else if (mode === "move" && dragMoved) {
+      const droppedOnBookmarks = resolveBookmarksBox(e.clientX, e.clientY);
       const loc = findParentArrayAndIndex(workbenchState, dragUid);
-      if (loc && dz) {
+      if (droppedOnBookmarks && loc) {
+        const originRect = dragSourceEl ? dragSourceEl.getBoundingClientRect() : null;
+        saveBookmark([loc.array[loc.index]], originRect);
+      } else if (loc && dz) {
         const draggedInst = loc.array[loc.index];
         const ownerUid = dz.dataset.owner === "root" ? null : parseInt(dz.dataset.owner, 10);
         const wouldCycle = ownerUid !== null && subtreeContainsUid(draggedInst, ownerUid);
@@ -1330,6 +1522,23 @@
       });
     });
   }
+
+  // drag/tap a saved pattern into the workbench, the same way toolbox
+  // blocks work (event delegation covers bookmarks added after load)
+  bookmarksBoxEl.addEventListener("pointerdown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.classList.contains("remove-btn")) {
+      return;
+    }
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const chip = e.target.closest(".bookmark-chip");
+    if (!chip) return;
+    startDrag(e, "bookmark", parseInt(chip.dataset.bookmarkId, 10));
+  });
+
+  bookmarkBtn.addEventListener("click", () => {
+    if (workbenchState.length === 0) return;
+    saveBookmark(workbenchState.slice(), bookmarkBtn.getBoundingClientRect());
+  });
 
   // reorder / move / remove existing chips (event delegation covers
   // chips created inside nested drop zones too)
@@ -1423,6 +1632,7 @@
 
   renderToolbox();
   attachToolboxHandlers();
+  renderBookmarks();
   renderWorkbench();
   recompute();
 })();

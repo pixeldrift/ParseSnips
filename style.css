@@ -113,6 +113,121 @@ body {
   }
 }
 
+/* Saved Patterns: another palette to drag/tap from, just like the
+   toolbox, but the entries are user (or seed) content rather than
+   fixed block types. */
+
+.bookmarks-box {
+  border: 1px dashed #bbb;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 60px;
+  transition: background-color 0.15s, outline-color 0.15s;
+}
+
+.bookmarks-box.drag-over-bookmarks {
+  background: #fffbea;
+  outline: 2px solid #d9b84a;
+  outline-offset: 2px;
+}
+
+.bookmarks-empty-hint {
+  color: #aaa;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.bookmark-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 10px;
+  padding: 6px 20px 6px 10px;
+  position: relative;
+  cursor: grab;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border: 1px solid #aaa;
+  touch-action: none;
+}
+
+.bookmark-chip:active {
+  cursor: grabbing;
+}
+
+.bookmark-name-input {
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.5);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+  padding: 1px 4px;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.bookmark-name-input:focus {
+  background: #fff;
+  border-color: #999;
+  outline: none;
+}
+
+.bookmark-pattern-caption {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 10px;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-chip .remove-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #aaa;
+  border-radius: 50%;
+  width: 15px;
+  height: 15px;
+  font-size: 10px;
+  line-height: 13px;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bookmark-chip .remove-btn:hover {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+
+@media (pointer: coarse) {
+  .bookmark-name-input {
+    font-size: 14px;
+  }
+
+  .bookmark-pattern-caption {
+    font-size: 11px;
+  }
+
+  .bookmark-chip .remove-btn {
+    top: -8px;
+    right: -8px;
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+    line-height: 20px;
+  }
+}
+
 /* fields inside blocks (toolbox previews + live inputs) */
 
 .field {
@@ -157,6 +272,7 @@ input.field-input {
   font-size: 12px;
   color: #333;
   padding: 1px 4px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 input.field-input.text-input {
@@ -194,6 +310,12 @@ input.field-input.char-input {
   justify-content: space-between;
 }
 
+.workbench-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .clear-btn {
   background: none;
   border: none;
@@ -205,6 +327,12 @@ input.field-input.char-input {
 
 .clear-btn:hover {
   color: #333;
+}
+
+.clear-btn:disabled {
+  color: #ccc;
+  cursor: default;
+  text-decoration: none;
 }
 
 .workbench {
@@ -356,6 +484,7 @@ input.field-input.char-input {
   border: 1px solid #999;
   border-radius: 6px;
   background: #fff;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .amount-summary {
@@ -717,4 +846,25 @@ textarea.text-box::placeholder {
 
 .cat-action {
   background: linear-gradient(#fdf1ee, #f7ddd4);
+}
+
+.cat-bookmark {
+  background: linear-gradient(#fffcf0, #f7ecc4);
+}
+
+/* The "lift off, shrink, fly to the bookmarks box" animation: a
+   lightweight stand-in chip (not a full clone of the saved subtree)
+   that shrinks, fades and travels from where the save happened to the
+   Saved Patterns box. */
+.bookmark-fly-ghost {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: left 0.5s ease-in, top 0.5s ease-in, width 0.5s ease-in,
+    height 0.5s ease-in, opacity 0.5s ease-in, font-size 0.5s ease-in;
 }
