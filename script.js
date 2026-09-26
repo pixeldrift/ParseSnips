@@ -1919,35 +1919,58 @@
   }
 
   // Pointer Events don't get the auto-scroll a native HTML5 drag would
-  // near a scroll container's edge, so on a tall, scrolled page (chiefly
-  // mobile, where the Workbench can start well below the fold) a drag
-  // could never reach an off-screen drop target at all. Scroll the page
-  // ourselves whenever the pointer sits near the top/bottom of the
-  // viewport while a drag is active -- speed ramps up the closer the
-  // pointer gets to the very edge.
-  const AUTO_SCROLL_EDGE_PX = 70;
-  const AUTO_SCROLL_MAX_SPEED = 16;
+  // near a scroll container's edge -- and on the phone layout, the
+  // Workbench/Toolbox/Saved/Output panels are each their own short,
+  // internally-scrolling region rather than one long page (see the
+  // max-width:860px rules in style.css), so it's usually one of THOSE
+  // that needs scrolling, not the page itself. Find whatever's actually
+  // scrollable under the pointer and nudge it whenever the pointer sits
+  // near its top/bottom edge while a drag is active -- speed ramps up
+  // the closer the pointer gets to the very edge.
+  const AUTO_SCROLL_EDGE_PX = 50;
+  const AUTO_SCROLL_MAX_SPEED = 14;
   let lastPointerX = 0;
   let lastPointerY = 0;
   let autoScrollRAF = null;
+
+  function findScrollableAncestor(el) {
+    let node = el;
+    while (node && node !== document.body) {
+      if (node.scrollHeight > node.clientHeight + 1) {
+        const overflowY = getComputedStyle(node).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") return node;
+      }
+      node = node.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
 
   function autoScrollTick() {
     if (!dragMode) {
       autoScrollRAF = null;
       return;
     }
-    const vh = window.innerHeight;
-    let dy = 0;
-    if (lastPointerY < AUTO_SCROLL_EDGE_PX) {
-      dy = -AUTO_SCROLL_MAX_SPEED * (1 - lastPointerY / AUTO_SCROLL_EDGE_PX);
-    } else if (lastPointerY > vh - AUTO_SCROLL_EDGE_PX) {
-      dy = AUTO_SCROLL_MAX_SPEED * (1 - (vh - lastPointerY) / AUTO_SCROLL_EDGE_PX);
-    }
-    if (dy !== 0) {
-      window.scrollBy(0, dy);
-      // The pointer hasn't actually moved -- content has scrolled under
-      // it -- so re-resolve what's now underneath it.
-      updateDragOverHighlight(lastPointerX, lastPointerY);
+    const underPointer = document.elementFromPoint(lastPointerX, lastPointerY);
+    const target = underPointer ? findScrollableAncestor(underPointer) : null;
+    if (target) {
+      const isWindow =
+        target === document.scrollingElement || target === document.documentElement;
+      const rect = isWindow
+        ? { top: 0, bottom: window.innerHeight }
+        : target.getBoundingClientRect();
+      let dy = 0;
+      if (lastPointerY < rect.top + AUTO_SCROLL_EDGE_PX) {
+        dy = -AUTO_SCROLL_MAX_SPEED * (1 - (lastPointerY - rect.top) / AUTO_SCROLL_EDGE_PX);
+      } else if (lastPointerY > rect.bottom - AUTO_SCROLL_EDGE_PX) {
+        dy = AUTO_SCROLL_MAX_SPEED * (1 - (rect.bottom - lastPointerY) / AUTO_SCROLL_EDGE_PX);
+      }
+      if (dy !== 0) {
+        if (isWindow) window.scrollBy(0, dy);
+        else target.scrollTop += dy;
+        // The pointer hasn't actually moved -- content scrolled under
+        // it -- so re-resolve what's now underneath it.
+        updateDragOverHighlight(lastPointerX, lastPointerY);
+      }
     }
     autoScrollRAF = requestAnimationFrame(autoScrollTick);
   }
@@ -2115,6 +2138,33 @@
         .querySelectorAll(".output-mode-btn")
         .forEach((b) => b.classList.toggle("active", b === btn));
       recompute();
+    });
+  });
+
+  // Phone-only tab bar (Toolbox / Saved / Output share one screen slot
+  // below the always-visible Workbench -- see the max-width:860px rules
+  // in style.css). The CSS ignores ".mobile-tab-active" entirely on a
+  // wide screen, where every panel is already visible at once, so this
+  // wiring is harmless there too and needs no screen-size check itself.
+  const mobileTabBarEl = document.getElementById("mobileTabBar");
+  const mobileTabPanels = {
+    toolbox: document.getElementById("toolboxPanel"),
+    saved: document.getElementById("savedPanel"),
+    output: document.getElementById("outputPanel"),
+  };
+  mobileTabBarEl.querySelectorAll(".mobile-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      mobileTabBarEl
+        .querySelectorAll(".mobile-tab-btn")
+        .forEach((b) => {
+          const isActive = b === btn;
+          b.classList.toggle("active", isActive);
+          b.setAttribute("aria-selected", isActive ? "true" : "false");
+        });
+      Object.keys(mobileTabPanels).forEach((key) => {
+        mobileTabPanels[key].classList.toggle("mobile-tab-active", key === tab);
+      });
     });
   });
 

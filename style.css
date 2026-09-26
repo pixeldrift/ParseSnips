@@ -29,35 +29,113 @@ body {
   min-width: 0;
 }
 
+/* Only relevant on the phone layout below -- hidden entirely on desktop,
+   where every panel is simply always visible. */
+.mobile-tab-bar {
+  display: none;
+}
+
 @media (max-width: 860px) {
+  /* On a phone there's no room to lay the Toolbox/Saved Patterns out
+     beside the Workbench, and dragging uses Pointer Events rather than
+     native HTML5 drag (see the auto-scroll handling in script.js), so a
+     drag can only reach what's already on screen. Rather than stack
+     everything and scroll (which buries the Workbench several screens
+     down), pin the Workbench at the top and turn the Toolbox/Saved
+     Patterns/Output sections into tabs sharing the space below it --
+     the drop target and whatever you're dragging from are always both
+     visible at once.
+
+     .sidebar and .main exist only to group panels for the desktop
+     two-column layout; "display: contents" dissolves them here so their
+     children (the panels) become direct flex items of .page, free to be
+     reordered/sized independently of that original grouping. */
   .page {
+    display: flex;
     flex-direction: column;
-    padding: 16px;
-    gap: 20px;
+    height: 100vh;
+    height: 100dvh;
+    padding: 12px;
+    gap: 8px;
+    overflow: hidden;
   }
 
-  .sidebar {
+  .sidebar,
+  .main {
+    display: contents;
+  }
+
+  .logo {
+    order: 0;
+    flex: 0 0 auto;
+    font-size: 20px;
+    margin: 0;
+  }
+
+  .panel-about {
+    order: 1;
+    flex: 0 0 auto;
+    max-height: 68px;
+    overflow-y: auto;
+  }
+
+  .panel-about .section-title,
+  .panel-workbench .section-title {
+    margin-top: 0;
+    margin-bottom: 4px;
+  }
+
+  .panel-about .about {
+    font-size: 12px;
+    margin: 0;
+  }
+
+  .panel-workbench {
+    order: 2;
+    /* A fixed basis (not just a cap) so this panel never grows as chips
+       are added -- #workbench scrolls internally instead, keeping the
+       tab bar and tab panels below it from shifting position. */
+    flex: 0 0 44vh;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+  }
+
+  .panel-workbench #workbench {
     flex: 1 1 auto;
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid #ccc;
-    padding-right: 0;
-    padding-bottom: 20px;
+    overflow-y: auto;
+    min-height: 90px;
   }
 
-  /* On a phone, a full-length Toolbox + Saved Patterns list can run to
-     several screens, burying the Workbench far below the fold -- and
-     since dragging uses Pointer Events rather than native HTML5 drag
-     (see the auto-scroll handling in script.js), the page can only
-     auto-scroll during an active drag, not eliminate the need for one.
-     Capping these two lists to their own short, internally-scrolling
-     panels keeps the whole sidebar compact so the Workbench is only a
-     short scroll (often no scroll at all) away. */
-  #toolbox,
-  .bookmarks-box {
-    max-height: 32vh;
+  .mobile-tab-bar {
+    order: 3;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+
+  /* All three tab panels share one order/slot -- only the active one is
+     actually displayed, so whichever it is fills the remaining height. */
+  .panel-toolbox,
+  .panel-saved,
+  .panel-output {
+    order: 4;
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .panel-toolbox.mobile-tab-active,
+  .panel-saved.mobile-tab-active,
+  .panel-output.mobile-tab-active {
+    display: block;
+  }
+
+  .sidebar .section-title {
+    margin-top: 0;
   }
 }
 
@@ -898,6 +976,34 @@ textarea.text-box::placeholder {
   border-color: #2f5a8a;
   color: #fff;
   font-weight: 600;
+}
+
+/* The phone-only tab bar switching between Toolbox / Saved / Output --
+   see .mobile-tab-bar and the .panel-* rules in the max-width:860px
+   media query above for how the tab content itself is shown/hidden. */
+.mobile-tab-btn {
+  flex: 1 1 0;
+  border: 1px solid #bbb;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 8px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+}
+
+.mobile-tab-btn.active {
+  background: #3b6fa8;
+  border-color: #2f5a8a;
+  color: #fff;
+}
+
+@media (pointer: coarse) {
+  .mobile-tab-btn {
+    padding: 10px 6px;
+    font-size: 14px;
+  }
 }
 
 @media (pointer: coarse) {
