@@ -29,6 +29,23 @@ body {
   min-width: 0;
 }
 
+@media (max-width: 860px) {
+  .page {
+    flex-direction: column;
+    padding: 16px;
+    gap: 20px;
+  }
+
+  .sidebar {
+    flex: 1 1 auto;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #ccc;
+    padding-right: 0;
+    padding-bottom: 20px;
+  }
+}
+
 .logo {
   font-family: Georgia, "Times New Roman", serif;
   font-weight: 700;
@@ -59,7 +76,8 @@ body {
   border-radius: 10px;
   padding: 12px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -67,7 +85,6 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  align-self: flex-start;
   background: linear-gradient(#f5f5f5, #e2e2e2);
   border: 1px solid #aaa;
   border-radius: 18px;
@@ -76,7 +93,9 @@ body {
   cursor: grab;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   user-select: none;
+  -webkit-user-select: none;
   white-space: nowrap;
+  touch-action: none;
 }
 
 .block:active {
@@ -85,6 +104,13 @@ body {
 
 .block.dragging-source {
   opacity: 0.4;
+}
+
+@media (pointer: coarse) {
+  .block {
+    padding: 9px 16px;
+    font-size: 14px;
+  }
 }
 
 /* fields inside blocks (toolbox previews + live inputs) */
@@ -146,6 +172,17 @@ input.field-input.number-input {
 input.field-input.char-input {
   width: 1.8em;
   text-align: center;
+}
+
+@media (pointer: coarse) {
+  input.field-input {
+    padding: 4px 6px;
+  }
+
+  .clear-btn {
+    font-size: 14px;
+    padding: 6px 4px;
+  }
 }
 
 /* Workbench */
@@ -228,6 +265,9 @@ input.field-input.char-input {
   font-size: 13px;
   position: relative;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
 .wb-chip:active {
@@ -239,25 +279,33 @@ input.field-input.char-input {
   background: #c0392b;
   color: #fff;
   border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  font-size: 11px;
-  line-height: 16px;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  line-height: 18px;
   text-align: center;
   cursor: pointer;
   padding: 0;
   margin-left: 2px;
+  flex: 0 0 auto;
 }
 
 .wb-chip .remove-btn:hover {
   background: #922b21;
 }
 
-.drop-indicator {
-  width: 2px;
-  align-self: stretch;
-  background: #4a90d9;
-  border-radius: 2px;
+@media (pointer: coarse) {
+  .wb-chip {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .wb-chip .remove-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 15px;
+    line-height: 24px;
+  }
 }
 
 /* Regex string row */
@@ -265,6 +313,7 @@ input.field-input.char-input {
 .regex-row {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .regex-field {
@@ -307,6 +356,16 @@ input.field-input.char-input {
   border-color: #8c8;
 }
 
+@media (max-width: 480px) {
+  .regex-field {
+    flex-basis: 100%;
+  }
+
+  .copy-btn {
+    flex: 1 1 auto;
+  }
+}
+
 /* Text areas */
 
 .text-box {
@@ -325,6 +384,21 @@ input.field-input.char-input {
 textarea.text-box::placeholder {
   color: #aaa;
   font-style: italic;
+}
+
+/* iOS Safari auto-zooms the page when a focused input's font is under
+   16px; bump form fields up to avoid that on touch devices. */
+@media (pointer: coarse) {
+  .text-box,
+  .regex-field,
+  input.field-input {
+    font-size: 16px;
+  }
+
+  input.field-input.number-input,
+  input.field-input.char-input {
+    width: 2.8em;
+  }
 }
 
 .output-box {

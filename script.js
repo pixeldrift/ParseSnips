@@ -61,31 +61,31 @@
     },
     singleOcc: {
       kind: "quantifier",
-      label: "a single occurence of:",
+      label: "a single occurrence of",
       fields: [],
       suffix: () => "",
     },
     exactly: {
       kind: "quantifier",
-      label: "exactly {n} occurences of",
+      label: "exactly {n} occurrences of",
       fields: [{ name: "n", kind: "number", default: 1 }],
       suffix: (f) => `{${clampInt(f.n)}}`,
     },
     atLeast: {
       kind: "quantifier",
-      label: "at least {n} or more occurences of",
+      label: "at least {n} or more occurrences of",
       fields: [{ name: "n", kind: "number", default: 1 }],
       suffix: (f) => `{${clampInt(f.n)},}`,
     },
     upTo: {
       kind: "quantifier",
-      label: "up to {n} occurences of",
+      label: "up to {n} occurrences of",
       fields: [{ name: "n", kind: "number", default: 1 }],
       suffix: (f) => `{0,${clampInt(f.n)}}`,
     },
     between: {
       kind: "quantifier",
-      label: "between {n} to {m} occurences of:",
+      label: "between {n} to {m} occurrences of",
       fields: [
         { name: "n", kind: "number", default: 1 },
         { name: "m", kind: "number", default: 1 },
@@ -103,7 +103,7 @@
     },
     moreThan: {
       kind: "quantifier",
-      label: "more than {n} occurences of",
+      label: "more than {n} occurrences of",
       fields: [{ name: "n", kind: "number", default: 1 }],
       suffix: (f) => `{${clampInt(f.n) + 1},}`,
     },
@@ -165,7 +165,7 @@
     },
     fromBeginning: {
       kind: "anchor",
-      label: "From the beginning",
+      label: "from the beginning",
       fields: [],
       symbol: "^",
     },
@@ -177,10 +177,30 @@
     },
     replaceWith: {
       kind: "action",
-      label: "Replace with: {text}",
+      label: "replace with {text}",
       fields: [{ name: "text", kind: "text", placeholder: "replacement" }],
     },
   };
+
+  // Single source of truth for the toolbox layout. The DOM for these
+  // blocks is generated from BLOCKS below, so labels only ever live here.
+  const TOOLBOX_GROUPS = [
+    ["literal", "anyOf", "anything", "not", "or"],
+    ["uppercase", "lowercase"],
+    [
+      "singleOcc",
+      "exactly",
+      "atLeast",
+      "upTo",
+      "between",
+      "moreThan",
+      "fewAsPossible",
+      "manyAsPossible",
+    ],
+    ["character", "letter", "digit", "letterOrDigit", "word", "letterRange"],
+    ["fromBeginning", "toEnd"],
+    ["replaceWith"],
+  ];
 
   // ---------------------------------------------------------------------
   // Regex fragment helpers
@@ -363,6 +383,7 @@
   // Rendering
   // ---------------------------------------------------------------------
 
+  const toolboxEl = document.getElementById("toolbox");
   const workbenchEl = document.getElementById("workbench");
   const regexOutputEl = document.getElementById("regexOutput");
   const textInputEl = document.getElementById("textInput");
@@ -371,7 +392,7 @@
   const clearBtn = document.getElementById("clearWorkbench");
 
   function labelParts(def) {
-    // splits "exactly {n} occurences of" into text/field tokens
+    // splits "exactly {n} occurrences of" into text/field tokens
     const parts = [];
     const re = /\{(\w+)\}/g;
     let last = 0;
@@ -389,12 +410,10 @@
     const def = BLOCKS[inst.defId];
     const chip = document.createElement("div");
     chip.className = isToolboxPreview ? "block" : "wb-chip";
-    if (!isToolboxPreview) {
-      chip.dataset.uid = inst.uid;
-      chip.draggable = true;
-    } else {
+    if (isToolboxPreview) {
       chip.dataset.def = inst.defId;
-      chip.draggable = true;
+    } else {
+      chip.dataset.uid = inst.uid;
     }
 
     labelParts(def).forEach((part) => {
@@ -419,6 +438,7 @@
         if (fieldDef.kind === "number") {
           input.type = "number";
           input.min = "0";
+          input.inputMode = "numeric";
         } else if (fieldDef.kind === "char") {
           input.type = "text";
           input.maxLength = 1;
@@ -433,8 +453,7 @@
           inst.fields[fieldDef.name] = input.value;
           recompute();
         });
-        input.addEventListener("mousedown", (e) => e.stopPropagation());
-        input.addEventListener("dragstart", (e) => e.preventDefault());
+        input.addEventListener("pointerdown", (e) => e.stopPropagation());
         chip.appendChild(input);
       }
     });
@@ -445,7 +464,7 @@
       removeBtn.className = "remove-btn";
       removeBtn.textContent = "×";
       removeBtn.title = "Remove";
-      removeBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+      removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
       removeBtn.addEventListener("click", () => {
         workbenchState = workbenchState.filter((x) => x.uid !== inst.uid);
         renderWorkbench();
@@ -457,12 +476,24 @@
     return chip;
   }
 
+  function renderToolbox() {
+    toolboxEl.innerHTML = "";
+    TOOLBOX_GROUPS.forEach((defIds) => {
+      const groupEl = document.createElement("div");
+      groupEl.className = "tool-group";
+      defIds.forEach((defId) => {
+        groupEl.appendChild(buildChip({ defId, fields: {} }, true));
+      });
+      toolboxEl.appendChild(groupEl);
+    });
+  }
+
   function renderWorkbench() {
     workbenchEl.innerHTML = "";
     if (workbenchState.length === 0) {
       const placeholder = document.createElement("div");
       placeholder.className = "workbench-placeholder";
-      placeholder.textContent = "Drag blocks here to build your pattern";
+      placeholder.textContent = "Drag or tap blocks to build your pattern";
       workbenchEl.appendChild(placeholder);
       return;
     }
@@ -562,29 +593,24 @@
   }
 
   // ---------------------------------------------------------------------
-  // Drag and drop (pointer based, works for touch + mouse, easy to test)
+  // Drag and drop (Pointer Events: unifies mouse, touch and pen)
   // ---------------------------------------------------------------------
+
+  const TAP_THRESHOLD_PX = 8;
 
   let dragGhost = null;
   let dragMode = null; // 'new' | 'move'
   let dragDefId = null;
   let dragUid = null;
   let dragSourceEl = null;
-
-  function clearIndicators() {
-    workbenchEl
-      .querySelectorAll(".drop-indicator")
-      .forEach((el) => el.remove());
-  }
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragMoved = false;
+  let activePointerId = null;
 
   function computeDropIndex(clientX) {
-    const chipEls = Array.from(
-      workbenchEl.querySelectorAll(".chip-group, .plus-sep")
-    );
-    // Build a list of top-level workbench item elements in order, mapped
-    // back to indices in workbenchState via the group structure.
     const groups = groupInstances(workbenchState);
-    let flatBoundaries = []; // cumulative count of instances before each group
+    const flatBoundaries = []; // cumulative count of instances before each group
     let count = 0;
     groups.forEach((g) => {
       flatBoundaries.push(count);
@@ -606,8 +632,14 @@
   }
 
   function startDrag(e, mode, payload) {
+    if (dragMode) return; // ignore a second finger/pointer mid-drag
     e.preventDefault();
     dragMode = mode;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragMoved = false;
+    activePointerId = e.pointerId;
+
     if (mode === "new") {
       dragDefId = payload;
     } else {
@@ -618,15 +650,19 @@
       if (dragSourceEl) dragSourceEl.style.opacity = "0.3";
     }
 
-    const def = BLOCKS[mode === "new" ? payload : workbenchState.find((x) => x.uid === payload).defId];
+    const def =
+      BLOCKS[
+        mode === "new" ? payload : workbenchState.find((x) => x.uid === payload).defId
+      ];
     dragGhost = document.createElement("div");
     dragGhost.className = "drag-ghost block";
     dragGhost.textContent = def.label.replace(/\{(\w+)\}/g, "___");
     document.body.appendChild(dragGhost);
     moveGhost(e);
 
-    document.addEventListener("mousemove", onDragMove);
-    document.addEventListener("mouseup", onDragEnd);
+    document.addEventListener("pointermove", onDragMove);
+    document.addEventListener("pointerup", onDragEnd);
+    document.addEventListener("pointercancel", onDragEnd);
   }
 
   function moveGhost(e) {
@@ -636,17 +672,28 @@
   }
 
   function onDragMove(e) {
+    if (e.pointerId !== activePointerId) return;
+    if (
+      !dragMoved &&
+      Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY) > TAP_THRESHOLD_PX
+    ) {
+      dragMoved = true;
+    }
     moveGhost(e);
-    const overWorkbench = e.clientX >= workbenchEl.getBoundingClientRect().left &&
-      e.clientX <= workbenchEl.getBoundingClientRect().right &&
-      e.clientY >= workbenchEl.getBoundingClientRect().top &&
-      e.clientY <= workbenchEl.getBoundingClientRect().bottom;
+    const rect = workbenchEl.getBoundingClientRect();
+    const overWorkbench =
+      e.clientX >= rect.left &&
+      e.clientX <= rect.right &&
+      e.clientY >= rect.top &&
+      e.clientY <= rect.bottom;
     workbenchEl.classList.toggle("drag-over", overWorkbench);
   }
 
   function onDragEnd(e) {
-    document.removeEventListener("mousemove", onDragMove);
-    document.removeEventListener("mouseup", onDragEnd);
+    if (e.pointerId !== activePointerId) return;
+    document.removeEventListener("pointermove", onDragMove);
+    document.removeEventListener("pointerup", onDragEnd);
+    document.removeEventListener("pointercancel", onDragEnd);
     workbenchEl.classList.remove("drag-over");
     if (dragGhost) {
       dragGhost.remove();
@@ -654,18 +701,26 @@
     }
 
     const rect = workbenchEl.getBoundingClientRect();
-    const dropped =
+    const droppedOverWorkbench =
       e.clientX >= rect.left &&
       e.clientX <= rect.right &&
       e.clientY >= rect.top &&
       e.clientY <= rect.bottom;
 
-    if (dropped) {
-      const insertIndex = computeDropIndex(e.clientX);
-      if (dragMode === "new") {
-        const inst = makeInstance(dragDefId);
-        workbenchState.splice(insertIndex, 0, inst);
-      } else if (dragMode === "move") {
+    // A tap (no meaningful movement) on a toolbox block appends it to the
+    // end of the workbench -- much easier to hit precisely on a phone
+    // than dragging a block onto the workbench's exact bounds.
+    const isTap = !dragMoved;
+
+    if (dragMode === "new" && (droppedOverWorkbench || isTap)) {
+      const insertIndex = isTap && !droppedOverWorkbench
+        ? workbenchState.length
+        : computeDropIndex(e.clientX);
+      const inst = makeInstance(dragDefId);
+      workbenchState.splice(insertIndex, 0, inst);
+    } else if (dragMode === "move") {
+      if (droppedOverWorkbench) {
+        const insertIndex = computeDropIndex(e.clientX);
         const fromIdx = workbenchState.findIndex((x) => x.uid === dragUid);
         if (fromIdx !== -1) {
           const [item] = workbenchState.splice(fromIdx, 1);
@@ -673,10 +728,10 @@
           if (fromIdx < idx) idx--;
           workbenchState.splice(idx, 0, item);
         }
+      } else if (dragMoved) {
+        // dragged outside workbench -> remove
+        workbenchState = workbenchState.filter((x) => x.uid !== dragUid);
       }
-    } else if (dragMode === "move") {
-      // dropped outside workbench -> remove
-      workbenchState = workbenchState.filter((x) => x.uid !== dragUid);
     }
 
     if (dragSourceEl) dragSourceEl.style.opacity = "";
@@ -684,25 +739,28 @@
     dragDefId = null;
     dragUid = null;
     dragSourceEl = null;
+    activePointerId = null;
 
     renderWorkbench();
     recompute();
   }
 
-  // toolbox block -> new instance
-  document.querySelectorAll("#toolbox .block").forEach((el) => {
-    el.addEventListener("mousedown", (e) => {
-      if (e.target.tagName === "INPUT") return;
-      startDrag(e, "new", el.dataset.def);
+  function attachToolboxHandlers() {
+    toolboxEl.querySelectorAll(".block").forEach((el) => {
+      el.addEventListener("pointerdown", (e) => {
+        if (e.target.tagName === "INPUT") return;
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        startDrag(e, "new", el.dataset.def);
+      });
     });
-    el.addEventListener("dragstart", (e) => e.preventDefault());
-  });
+  }
 
-  // reorder existing chips
-  workbenchEl.addEventListener("mousedown", (e) => {
+  // reorder / remove existing chips
+  workbenchEl.addEventListener("pointerdown", (e) => {
     if (e.target.tagName === "INPUT" || e.target.classList.contains("remove-btn")) {
       return;
     }
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     const chip = e.target.closest(".wb-chip");
     if (!chip) return;
     startDrag(e, "move", parseInt(chip.dataset.uid, 10));
@@ -734,6 +792,8 @@
     }, 1200);
   });
 
+  renderToolbox();
+  attachToolboxHandlers();
   renderWorkbench();
   recompute();
 })();
