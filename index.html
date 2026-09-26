@@ -27,18 +27,25 @@
 
     <h2 class="section-title">Regex string:</h2>
     <div class="regex-row">
-      <input id="regexOutput" class="regex-field" type="text" readonly placeholder="Regex code" />
+      <input id="regexOutput" class="regex-field" type="text" placeholder="Regex code" spellcheck="false" />
+      <button id="rebuildBtn" class="copy-btn" type="button" title="Parse this text back into blocks">Rebuild blocks</button>
       <button id="copyBtn" class="copy-btn" type="button">Copy to Clipboard</button>
     </div>
+    <div id="regexParseError" class="parse-error"></div>
     <label class="flag-row">
       <input type="checkbox" id="ignoreCase" />
       ignore case
     </label>
 
-    <h2 class="section-title">Text to Process:</h2>
+    <div class="section-header-row">
+      <h2 class="section-title">Text to Process:</h2>
+    </div>
     <textarea id="textInput" class="text-box" placeholder="Paste your text here."></textarea>
 
-    <h2 class="section-title">Output text:</h2>
+    <div class="section-header-row">
+      <h2 class="section-title">Output text:</h2>
+      <button id="outputCopyBtn" class="clear-btn" type="button">Copy</button>
+    </div>
     <div id="outputBox" class="text-box output-box" data-placeholder="See your results here."></div>
 
     <h2 class="section-title">About:</h2>

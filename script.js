@@ -79,25 +79,35 @@
     { value: "many", label: "as many as possible" },
   ];
 
+  // Modes whose suffix has an inherent greedy/lazy distinction of its own
+  // ("as few/many as possible" already pick one) -- everything else in
+  // this list can additionally take the generic lazy toggle.
+  const LAZY_TOGGLE_MODES = ["atLeast", "upTo", "between", "moreThan"];
+
   function amountSuffix(fields) {
     const n = clampInt(fields.n);
     const m = clampInt(fields.m);
+    let suffix;
     switch (fields.mode) {
       case "single":
         return "";
       case "exactly":
         return `{${n}}`;
       case "atLeast":
-        return `{${n},}`;
+        suffix = `{${n},}`;
+        break;
       case "upTo":
-        return `{0,${n}}`;
+        suffix = `{0,${n}}`;
+        break;
       case "between": {
         const lo = Math.min(n, m);
         const hi = Math.max(n, m);
-        return `{${lo},${hi}}`;
+        suffix = `{${lo},${hi}}`;
+        break;
       }
       case "moreThan":
-        return `{${n + 1},}`;
+        suffix = `{${n + 1},}`;
+        break;
       case "few":
         return "*?";
       case "many":
@@ -105,19 +115,27 @@
       default:
         return "";
     }
+    if (fields.lazy === "true" && LAZY_TOGGLE_MODES.includes(fields.mode)) {
+      suffix += "?";
+    }
+    return suffix;
   }
 
   function amountSummary(fields) {
     const mode = AMOUNT_MODES.find((m) => m.value === fields.mode);
     const label = mode ? mode.label : fields.mode;
+    const lazySuffix =
+      fields.lazy === "true" && LAZY_TOGGLE_MODES.includes(fields.mode)
+        ? ", lazy"
+        : "";
     switch (fields.mode) {
       case "exactly":
       case "atLeast":
       case "upTo":
       case "moreThan":
-        return `${label} ${fields.n}`;
+        return `${label} ${fields.n}${lazySuffix}`;
       case "between":
-        return `${label} ${fields.n}-${fields.m}`;
+        return `${label} ${fields.n}-${fields.m}${lazySuffix}`;
       default:
         return label;
     }
@@ -131,10 +149,13 @@
       compute: (f) => escapeLiteral(f.text || ""),
     },
     anyOf: {
+      // Raw pass-through: whatever is typed here becomes the literal body
+      // of a [...] class, so ranges (a-z), escapes (\d) and everything
+      // else round-trip exactly when a regex is parsed back into blocks.
       kind: "atom",
       label: "any of {chars}",
       fields: [{ name: "chars", kind: "text", placeholder: "characters" }],
-      compute: (f) => `[${escapeClass(f.chars || "")}]`,
+      compute: (f) => `[${f.chars || ""}]`,
     },
     anything: {
       kind: "atom",
@@ -180,9 +201,15 @@
     },
     word: {
       kind: "atom",
-      label: "word",
+      label: "word character",
       fields: [],
-      compute: () => "\\w+",
+      compute: () => "\\w",
+    },
+    whitespace: {
+      kind: "atom",
+      label: "whitespace",
+      fields: [],
+      compute: () => "\\s",
     },
     letterRange: {
       kind: "atom",
@@ -208,6 +235,18 @@
       label: "to the end",
       fields: [],
       compute: () => "$",
+    },
+    wordBoundary: {
+      kind: "atom",
+      label: "word boundary",
+      fields: [],
+      compute: () => "\\b",
+    },
+    notWordBoundary: {
+      kind: "atom",
+      label: "not a word boundary",
+      fields: [],
+      compute: () => "\\B",
     },
     replaceWith: {
       kind: "action",
@@ -272,8 +311,16 @@
     ["literal", "anyOf", "anything", "not", "or", "group"],
     ["uppercase", "lowercase"],
     ["amount"],
-    ["character", "letter", "digit", "letterOrDigit", "word", "letterRange"],
-    ["fromBeginning", "toEnd"],
+    [
+      "character",
+      "letter",
+      "digit",
+      "letterOrDigit",
+      "word",
+      "whitespace",
+      "letterRange",
+    ],
+    ["fromBeginning", "toEnd", "wordBoundary", "notWordBoundary"],
     ["lookahead", "notLookahead", "lookbehind", "notLookbehind"],
     ["replaceWith"],
   ];
@@ -290,7 +337,7 @@
     if (def.kind === "container") {
       const fields =
         defId === "amount"
-          ? { mode: "atLeast", n: "1", m: "1", collapsed: "false" }
+          ? { mode: "atLeast", n: "1", m: "1", lazy: "false", collapsed: "false" }
           : {};
       return { uid: ++uidCounter, defId, fields, children: [] };
     }
@@ -388,6 +435,275 @@
   }
 
   // ---------------------------------------------------------------------
+  // Reverse parsing: regex text -> block tree.
+  //
+  // Lets someone paste or hand-edit a plain regex string (no special
+  // markup) and have it rebuilt into blocks -- the same round trip that
+  // makes a regex string usable as a plain-text "favorite" snippet.
+  //
+  // Supports exactly the subset of regex syntax our blocks can express.
+  // Constructs with no block equivalent (backreferences, inline flag
+  // groups, unicode property escapes, atomic/possessive quantifiers)
+  // raise a clear error instead of silently producing something wrong.
+  // A plain or named capturing group is accepted but downgraded to a
+  // plain "group:" block, since capture groups aren't wired up to
+  // anything yet.
+  // ---------------------------------------------------------------------
+
+  function newParsedNode(defId, fields, children) {
+    const def = BLOCKS[defId];
+    if (def.kind === "container") {
+      const finalFields = {};
+      if (defId === "amount") {
+        finalFields.mode = (fields && fields.mode) || "atLeast";
+        finalFields.n = fields && fields.n !== undefined ? String(fields.n) : "1";
+        finalFields.m = fields && fields.m !== undefined ? String(fields.m) : "1";
+        finalFields.lazy = (fields && fields.lazy) || "false";
+        finalFields.collapsed = "false";
+      }
+      return { uid: ++uidCounter, defId, fields: finalFields, children: children || [] };
+    }
+    const finalFields = {};
+    (def.fields || []).forEach((f) => {
+      const v = fields ? fields[f.name] : undefined;
+      finalFields[f.name] = v !== undefined ? String(v) : f.default !== undefined ? String(f.default) : "";
+    });
+    return { uid: ++uidCounter, defId, fields: finalFields };
+  }
+
+  function mergeLiterals(nodes) {
+    const out = [];
+    for (const node of nodes) {
+      const prev = out[out.length - 1];
+      if (prev && prev.defId === "literal" && node.defId === "literal") {
+        prev.fields.text += node.fields.text;
+      } else {
+        out.push(node);
+      }
+    }
+    return out;
+  }
+
+  function parseRegexToNodes(pattern) {
+    let i = 0;
+    const n = pattern.length;
+
+    function peek() {
+      return pattern[i];
+    }
+    function eof() {
+      return i >= n;
+    }
+    function fail(msg) {
+      const around = pattern.slice(Math.max(0, i - 6), i + 6);
+      throw new Error(`${msg} (near "...${around}..." at position ${i})`);
+    }
+    function expect(ch) {
+      if (eof() || peek() !== ch) fail(`Expected "${ch}"`);
+      i++;
+    }
+
+    function parseAlternation() {
+      const branches = [parseConcat()];
+      while (!eof() && peek() === "|") {
+        i++;
+        branches.push(parseConcat());
+      }
+      if (branches.length === 1) return branches[0];
+      const children = branches.map((nodes) => newParsedNode("group", {}, nodes));
+      return [newParsedNode("or", {}, children)];
+    }
+
+    function parseConcat() {
+      const nodes = [];
+      while (!eof() && peek() !== "|" && peek() !== ")") {
+        nodes.push(parsePiece());
+      }
+      return mergeLiterals(nodes);
+    }
+
+    function parsePiece() {
+      const atomNode = parseAtom();
+      const quant = tryParseQuantifier();
+      if (!quant) return atomNode;
+      return newParsedNode("amount", quant, [atomNode]);
+    }
+
+    function tryParseQuantifier() {
+      if (eof()) return null;
+      const c = peek();
+      let fields = null;
+      if (c === "*") {
+        i++;
+        fields = { mode: "many" };
+      } else if (c === "+") {
+        i++;
+        fields = { mode: "atLeast", n: "1" };
+      } else if (c === "?") {
+        i++;
+        fields = { mode: "upTo", n: "1" };
+      } else if (c === "{") {
+        const m = /^\{(\d+)(,(\d*))?\}/.exec(pattern.slice(i));
+        if (!m) return null; // not a valid quantifier -- '{' is a literal char
+        i += m[0].length;
+        if (m[2] === undefined) fields = { mode: "exactly", n: m[1] };
+        else if (!m[3]) fields = { mode: "atLeast", n: m[1] };
+        else fields = { mode: "between", n: m[1], m: m[3] };
+      } else {
+        return null;
+      }
+      let lazy = false;
+      if (!eof() && peek() === "?") {
+        i++;
+        lazy = true;
+      }
+      if (fields.mode === "many" && lazy) {
+        fields.mode = "few";
+      } else {
+        fields.lazy = lazy ? "true" : "false";
+      }
+      return fields;
+    }
+
+    function parseAtom() {
+      if (eof()) fail("Unexpected end of pattern");
+      const c = peek();
+      if (c === "^") {
+        i++;
+        return newParsedNode("fromBeginning", {});
+      }
+      if (c === "$") {
+        i++;
+        return newParsedNode("toEnd", {});
+      }
+      if (c === ".") {
+        i++;
+        return newParsedNode("anything", {});
+      }
+      if (c === "*" || c === "+" || c === "?") {
+        fail(`Quantifier "${c}" with nothing to repeat`);
+      }
+      if (c === ")") fail('Unexpected ")"');
+      if (c === "(") return parseGroup();
+      if (c === "[") return parseCharClass();
+      if (c === "\\") return parseEscape();
+      i++;
+      return newParsedNode("literal", { text: c });
+    }
+
+    function parseCharClass() {
+      i++; // consume '['
+      let negated = false;
+      if (!eof() && peek() === "^") {
+        negated = true;
+        i++;
+      }
+      const start = i;
+      while (!eof() && peek() !== "]") {
+        if (peek() === "\\") i += 2;
+        else i++;
+      }
+      if (eof()) fail("Unterminated character class");
+      const content = pattern.slice(start, i);
+      i++; // consume ']'
+      const atomNode = newParsedNode("anyOf", { chars: content });
+      return negated ? newParsedNode("not", {}, [atomNode]) : atomNode;
+    }
+
+    function parseEscape() {
+      i++; // consume backslash
+      if (eof()) fail("Trailing backslash");
+      const c = pattern[i];
+      i++;
+      switch (c) {
+        case "d":
+          return newParsedNode("digit", {});
+        case "D":
+          return newParsedNode("not", {}, [newParsedNode("digit", {})]);
+        case "w":
+          return newParsedNode("word", {});
+        case "W":
+          return newParsedNode("not", {}, [newParsedNode("word", {})]);
+        case "s":
+          return newParsedNode("whitespace", {});
+        case "S":
+          return newParsedNode("not", {}, [newParsedNode("whitespace", {})]);
+        case "b":
+          return newParsedNode("wordBoundary", {});
+        case "B":
+          return newParsedNode("notWordBoundary", {});
+        case "n":
+          return newParsedNode("literal", { text: "\n" });
+        case "t":
+          return newParsedNode("literal", { text: "\t" });
+        case "r":
+          return newParsedNode("literal", { text: "\r" });
+        default:
+          if (/[0-9]/.test(c)) fail("Backreferences aren't supported");
+          if ("uxpPk".includes(c)) fail(`The "\\${c}" escape isn't supported`);
+          return newParsedNode("literal", { text: c });
+      }
+    }
+
+    function parseGroup() {
+      i++; // consume '('
+      if (!eof() && peek() === "?") {
+        const next = pattern[i + 1];
+        if (next === ":") {
+          i += 2;
+          const inner = parseAlternation();
+          expect(")");
+          return newParsedNode("group", {}, inner);
+        }
+        if (next === "=") {
+          i += 2;
+          const inner = parseAlternation();
+          expect(")");
+          return newParsedNode("lookahead", {}, inner);
+        }
+        if (next === "!") {
+          i += 2;
+          const inner = parseAlternation();
+          expect(")");
+          return newParsedNode("notLookahead", {}, inner);
+        }
+        if (next === "<" && pattern[i + 2] === "=") {
+          i += 3;
+          const inner = parseAlternation();
+          expect(")");
+          return newParsedNode("lookbehind", {}, inner);
+        }
+        if (next === "<" && pattern[i + 2] === "!") {
+          i += 3;
+          const inner = parseAlternation();
+          expect(")");
+          return newParsedNode("notLookbehind", {}, inner);
+        }
+        if (next === "<") {
+          // named capturing group -- downgraded to a plain group, since
+          // captures aren't wired to anything (yet).
+          i += 2;
+          while (!eof() && peek() !== ">") i++;
+          if (eof()) fail("Unterminated group name");
+          i++;
+          const inner = parseAlternation();
+          expect(")");
+          return newParsedNode("group", {}, inner);
+        }
+        fail(`Unsupported group syntax "(?${next || ""}"`);
+      }
+      // plain capturing group -- also downgraded to a plain group
+      const inner = parseAlternation();
+      expect(")");
+      return newParsedNode("group", {}, inner);
+    }
+
+    const nodes = parseAlternation();
+    if (!eof()) fail(`Unexpected "${peek()}"`);
+    return nodes;
+  }
+
+  // ---------------------------------------------------------------------
   // Rendering
   // ---------------------------------------------------------------------
 
@@ -397,6 +713,9 @@
   const textInputEl = document.getElementById("textInput");
   const outputBoxEl = document.getElementById("outputBox");
   const copyBtn = document.getElementById("copyBtn");
+  const outputCopyBtn = document.getElementById("outputCopyBtn");
+  const rebuildBtn = document.getElementById("rebuildBtn");
+  const regexParseErrorEl = document.getElementById("regexParseError");
   const clearBtn = document.getElementById("clearWorkbench");
   const ignoreCaseEl = document.getElementById("ignoreCase");
 
@@ -562,6 +881,23 @@
         })
       );
     }
+
+    if (LAZY_TOGGLE_MODES.includes(mode)) {
+      const lazyLabel = document.createElement("label");
+      lazyLabel.className = "lazy-toggle";
+      const lazyCheckbox = document.createElement("input");
+      lazyCheckbox.type = "checkbox";
+      lazyCheckbox.checked = inst.fields.lazy === "true";
+      lazyCheckbox.addEventListener("pointerdown", (e) => e.stopPropagation());
+      lazyCheckbox.addEventListener("change", () => {
+        inst.fields.lazy = lazyCheckbox.checked ? "true" : "false";
+        recompute();
+      });
+      lazyLabel.appendChild(lazyCheckbox);
+      lazyLabel.appendChild(document.createTextNode("lazy"));
+      headerEl.appendChild(lazyLabel);
+    }
+
     headerEl.appendChild(document.createTextNode("of:"));
   }
 
@@ -653,7 +989,11 @@
       return;
     }
 
-    regexOutputEl.value = result.pattern;
+    // Don't overwrite what the user is actively typing into the regex
+    // field -- it only gets replaced once they rebuild blocks from it.
+    if (document.activeElement !== regexOutputEl) {
+      regexOutputEl.value = result.pattern;
+    }
 
     const text = textInputEl.value;
     if (!result.pattern) {
@@ -668,7 +1008,7 @@
     } catch (e) {
       regexOutputEl.classList.add("error");
       regexOutputEl.placeholder = "Invalid regex: " + e.message;
-      regexOutputEl.value = "";
+      if (document.activeElement !== regexOutputEl) regexOutputEl.value = "";
       outputBoxEl.textContent = text;
       return;
     }
@@ -956,22 +1296,68 @@
   textInputEl.addEventListener("input", recompute);
   ignoreCaseEl.addEventListener("change", recompute);
 
-  copyBtn.addEventListener("click", async () => {
-    const value = regexOutputEl.value;
-    if (!value) return;
+  async function copyToClipboard(text, btn) {
+    if (!text) return;
     try {
-      await navigator.clipboard.writeText(value);
+      await navigator.clipboard.writeText(text);
     } catch (e) {
-      regexOutputEl.select();
+      const helper = document.createElement("textarea");
+      helper.value = text;
+      helper.style.position = "fixed";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.select();
       document.execCommand("copy");
+      helper.remove();
     }
-    copyBtn.classList.add("copied");
-    const original = copyBtn.textContent;
-    copyBtn.textContent = "Copied!";
+    const original = btn.textContent;
+    btn.classList.add("copied");
+    btn.textContent = "Copied!";
     setTimeout(() => {
-      copyBtn.classList.remove("copied");
-      copyBtn.textContent = original;
+      btn.classList.remove("copied");
+      btn.textContent = original;
     }, 1200);
+  }
+
+  copyBtn.addEventListener("click", () => copyToClipboard(regexOutputEl.value, copyBtn));
+  outputCopyBtn.addEventListener("click", () =>
+    copyToClipboard(outputBoxEl.textContent, outputCopyBtn)
+  );
+
+  // -- reverse parsing: rebuild the block tree from edited regex text ----
+
+  function rebuildFromRegexText() {
+    const text = regexOutputEl.value;
+    let nodes;
+    try {
+      nodes = parseRegexToNodes(text);
+    } catch (e) {
+      regexParseErrorEl.textContent = e.message;
+      return;
+    }
+    regexParseErrorEl.textContent = "";
+    workbenchState = nodes;
+    renderWorkbench();
+    recompute();
+  }
+
+  rebuildBtn.addEventListener("click", rebuildFromRegexText);
+  regexOutputEl.addEventListener("blur", () => {
+    // Only re-parse if the text actually diverged from the last
+    // generated pattern -- otherwise every click-away would needlessly
+    // reset scroll position / selection in the field for no change.
+    if (regexOutputEl.value !== computeRegex(workbenchState).pattern) {
+      rebuildFromRegexText();
+    }
+  });
+  regexOutputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      regexOutputEl.blur();
+    }
+  });
+  regexOutputEl.addEventListener("input", () => {
+    regexParseErrorEl.textContent = "";
   });
 
   renderToolbox();
