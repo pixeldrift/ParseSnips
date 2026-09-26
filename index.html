@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ParseSnips - Visual Regex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -20,6 +23,13 @@
   </aside>
 
   <main class="main">
+    <h2 class="section-title">About:</h2>
+    <p class="about">
+      <strong>ParseSnips</strong> is a visually intuitive, natural language approach to generating regular expressions. No coding or
+      advanced logic necessary. Simply drag criteria blocks from your Toolbox to the Workbench in order to generate
+      your RegEx string and preview the results in real time.
+    </p>
+
     <div class="workbench-header">
       <h2 class="section-title">Workbench:</h2>
       <div class="workbench-header-actions">
@@ -42,15 +52,11 @@
       <button id="rebuildBtn" class="copy-btn" type="button" title="Parse this text back into blocks">Rebuild blocks</button>
     </div>
     <div id="regexParseError" class="parse-error"></div>
-    <label class="flag-row">
-      <input type="checkbox" id="ignoreCase" />
-      ignore case
-    </label>
 
     <div class="section-header-row">
       <h2 class="section-title">Text to Process:</h2>
     </div>
-    <textarea id="textInput" class="text-box" placeholder="Paste your text here."></textarea>
+    <textarea id="textInput" class="text-box" placeholder="Paste your text here.">Please contact our support team at support@example.com or sales@example.org if you have questions. You can also reach us by phone at (555) 123-4567, Monday through Friday. Your order placed on 03/15/2024 has shipped to 500 Market Street, Springfield, IL 62704, and you can track it any time at https://www.example.com/track. For reference, here is a snippet of the confirmation page: &lt;p class="note"&gt;Thanks for shopping with us!&lt;/p&gt;</textarea>
 
     <div class="section-header-row">
       <h2 class="section-title">Output text:</h2>
@@ -62,13 +68,6 @@
       <button type="button" class="output-mode-btn" data-mode="removed">Matches removed</button>
     </div>
     <div id="outputBox" class="text-box output-box" data-placeholder="See your results here."></div>
-
-    <h2 class="section-title">About:</h2>
-    <p class="about">
-      <strong>ParseSnips</strong> is a visually intuitive, natural language approach to generating regular expressions. No coding or
-      advanced logic necessary. Simply drag criteria blocks from your Toolbox to the Workbench in order to generate
-      your RegEx string and preview the results in real time.
-    </p>
   </main>
 
 </div>
