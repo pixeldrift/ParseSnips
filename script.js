@@ -68,6 +68,83 @@
     return `(?:(?!${base}).)`;
   }
 
+  // "case insensitive:" has no scoped regex-flag equivalent that's safe
+  // across engines, so it works by expanding letters/ranges into both
+  // cases directly in the pattern text -- "a" becomes "[aA]", "a-z"
+  // gains a parallel "A-Z", etc. Only touches structure the block model
+  // itself produces (or already-parsed classes), so escapes, groups,
+  // alternation and quantifiers all pass through untouched.
+  function otherCase(ch) {
+    const lower = ch.toLowerCase();
+    const upper = ch.toUpperCase();
+    if (ch === lower && ch !== upper) return upper;
+    if (ch === upper && ch !== lower) return lower;
+    return null; // not a cased letter
+  }
+
+  function expandClassContentCase(content) {
+    let out = "";
+    let i = 0;
+    while (i < content.length) {
+      const c = content[i];
+      if (c === "\\") {
+        out += content.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+      const isRange =
+        content[i + 1] === "-" &&
+        i + 2 < content.length &&
+        content[i + 2] !== "\\" &&
+        otherCase(c) &&
+        otherCase(content[i + 2]);
+      if (isRange) {
+        const start = c;
+        const end = content[i + 2];
+        out += `${start}-${end}${otherCase(start)}-${otherCase(end)}`;
+        i += 3;
+        continue;
+      }
+      const alt = otherCase(c);
+      out += alt ? c + alt : c;
+      i++;
+    }
+    return out;
+  }
+
+  function foldCase(fragment) {
+    let out = "";
+    let i = 0;
+    while (i < fragment.length) {
+      const c = fragment[i];
+      if (c === "\\") {
+        out += fragment.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+      if (c === "[") {
+        let j = i + 1;
+        let negated = false;
+        if (fragment[j] === "^") {
+          negated = true;
+          j++;
+        }
+        const start = j;
+        while (j < fragment.length && fragment[j] !== "]") {
+          j += fragment[j] === "\\" ? 2 : 1;
+        }
+        const content = fragment.slice(start, j);
+        out += `[${negated ? "^" : ""}${expandClassContentCase(content)}]`;
+        i = j + 1;
+        continue;
+      }
+      const alt = otherCase(c);
+      out += alt ? `[${c}${alt}]` : c;
+      i++;
+    }
+    return out;
+  }
+
   const AMOUNT_MODES = [
     { value: "single", label: "a single occurrence" },
     { value: "exactly", label: "exactly" },
@@ -143,6 +220,7 @@
       kind: "atom",
       category: "logic",
       label: "literal {text}",
+      icon: "“…”",
       fields: [{ name: "text", kind: "text", placeholder: "text" }],
       compute: (f) => escapeLiteral(f.text || ""),
     },
@@ -153,6 +231,7 @@
       kind: "atom",
       category: "logic",
       label: "any of {chars}",
+      icon: "[…]",
       fields: [{ name: "chars", kind: "text", placeholder: "characters" }],
       compute: (f) => `[${f.chars || ""}]`,
     },
@@ -160,6 +239,7 @@
       kind: "atom",
       category: "logic",
       label: "anything",
+      icon: ".",
       fields: [],
       compute: () => ".",
     },
@@ -167,6 +247,7 @@
       kind: "atom",
       category: "case",
       label: "uppercase",
+      icon: "[A-Z]",
       fields: [],
       compute: () => "[A-Z]",
     },
@@ -174,6 +255,7 @@
       kind: "atom",
       category: "case",
       label: "lowercase",
+      icon: "[a-z]",
       fields: [],
       compute: () => "[a-z]",
     },
@@ -181,6 +263,7 @@
       kind: "atom",
       category: "class",
       label: "character",
+      icon: ".",
       fields: [],
       compute: () => ".",
     },
@@ -188,6 +271,7 @@
       kind: "atom",
       category: "class",
       label: "letter",
+      icon: "Aa",
       fields: [],
       compute: () => "[a-zA-Z]",
     },
@@ -195,6 +279,7 @@
       kind: "atom",
       category: "class",
       label: "digit",
+      icon: "\\d",
       fields: [],
       compute: () => "[0-9]",
     },
@@ -202,6 +287,7 @@
       kind: "atom",
       category: "class",
       label: "letter or digit",
+      icon: "Aa9",
       fields: [],
       compute: () => "[a-zA-Z0-9]",
     },
@@ -209,6 +295,7 @@
       kind: "atom",
       category: "class",
       label: "word character",
+      icon: "\\w",
       fields: [],
       compute: () => "\\w",
     },
@@ -216,6 +303,7 @@
       kind: "atom",
       category: "class",
       label: "whitespace",
+      icon: "\\s",
       fields: [],
       compute: () => "\\s",
     },
@@ -223,6 +311,7 @@
       kind: "atom",
       category: "class",
       label: "the letter {from} through {to}",
+      icon: "a-z",
       fields: [
         { name: "from", kind: "char", default: "a" },
         { name: "to", kind: "char", default: "z" },
@@ -237,6 +326,7 @@
       kind: "atom",
       category: "anchor",
       label: "from the beginning",
+      icon: "^",
       fields: [],
       compute: () => "^",
     },
@@ -244,6 +334,7 @@
       kind: "atom",
       category: "anchor",
       label: "to the end",
+      icon: "$",
       fields: [],
       compute: () => "$",
     },
@@ -251,6 +342,7 @@
       kind: "atom",
       category: "anchor",
       label: "word boundary",
+      icon: "\\b",
       fields: [],
       compute: () => "\\b",
     },
@@ -258,6 +350,7 @@
       kind: "atom",
       category: "anchor",
       label: "not a word boundary",
+      icon: "\\B",
       fields: [],
       compute: () => "\\B",
     },
@@ -265,7 +358,34 @@
       kind: "action",
       category: "action",
       label: "replace with {text}",
+      icon: "⇄",
       fields: [{ name: "text", kind: "text", placeholder: "replacement" }],
+    },
+
+    matchGroup: {
+      // References another named "group:" block already on the workbench
+      // by substituting a copy of its compiled pattern at this spot --
+      // not a real regex backreference (those need a capturing group,
+      // which isn't wired up to anything yet), just reuse without
+      // having to duplicate the blocks by hand.
+      kind: "atom",
+      category: "logic",
+      label: "match group:",
+      icon: "#",
+      fields: [],
+      compute: (f) => {
+        const uid = parseInt(f.refUid, 10);
+        if (!uid) return "";
+        if (matchGroupResolutionStack.includes(uid)) return ""; // cycle guard
+        const target = findInstanceByUid(workbenchState, uid);
+        if (!target || target.defId !== "group") return "";
+        matchGroupResolutionStack.push(uid);
+        try {
+          return computeNode(target);
+        } finally {
+          matchGroupResolutionStack.pop();
+        }
+      },
     },
 
     // -- containers: each holds a nested drop zone -----------------------
@@ -273,6 +393,7 @@
       kind: "container",
       category: "logic",
       label: "group:",
+      icon: "(…)",
       childJoin: "concat",
       wrap: (inner) => (isAlreadyGrouped(inner) ? inner : `(?:${inner})`),
     },
@@ -280,13 +401,26 @@
       kind: "container",
       category: "logic",
       label: "not:",
+      icon: "¬",
       childJoin: "concat",
       wrap: (inner) => negateBase(inner),
+    },
+    caseInsensitive: {
+      // No portable scoped regex-flag equivalent, so this expands
+      // letters/ranges into both cases directly (see foldCase) --
+      // "a" -> "[aA]", "a-z" -> "a-zA-Z", etc.
+      kind: "container",
+      category: "case",
+      label: "case insensitive:",
+      icon: "Aa",
+      childJoin: "concat",
+      wrap: (inner) => foldCase(inner),
     },
     or: {
       kind: "container",
       category: "logic",
       label: "either:",
+      icon: "|",
       childJoin: "alternate",
       wrap: (inner) => `(?:${inner})`,
     },
@@ -294,6 +428,7 @@
       kind: "container",
       category: "lookaround",
       label: "followed by:",
+      icon: "?=",
       childJoin: "concat",
       wrap: (inner) => `(?=${inner})`,
     },
@@ -301,6 +436,7 @@
       kind: "container",
       category: "lookaround",
       label: "not followed by:",
+      icon: "?!",
       childJoin: "concat",
       wrap: (inner) => `(?!${inner})`,
     },
@@ -308,6 +444,7 @@
       kind: "container",
       category: "lookaround",
       label: "preceded by:",
+      icon: "?<=",
       childJoin: "concat",
       wrap: (inner) => `(?<=${inner})`,
     },
@@ -315,6 +452,7 @@
       kind: "container",
       category: "lookaround",
       label: "not preceded by:",
+      icon: "?<!",
       childJoin: "concat",
       wrap: (inner) => `(?<!${inner})`,
     },
@@ -322,6 +460,7 @@
       kind: "container",
       category: "quantity",
       label: "amount:",
+      icon: "{n}",
       childJoin: "concat",
       // wrap handled specially in computeNode (needs the mode dropdown)
     },
@@ -330,8 +469,8 @@
   // Single source of truth for the toolbox layout. The DOM is generated
   // from BLOCKS, so labels only ever live in one place.
   const TOOLBOX_GROUPS = [
-    ["literal", "anyOf", "anything", "not", "or", "group"],
-    ["uppercase", "lowercase"],
+    ["literal", "anyOf", "anything", "not", "or", "group", "matchGroup"],
+    ["uppercase", "lowercase", "caseInsensitive"],
     ["amount"],
     [
       "character",
@@ -353,15 +492,23 @@
 
   let uidCounter = 0;
   let workbenchState = [];
+  let matchGroupResolutionStack = []; // cycle guard for "match group:" lookups
 
   function makeInstance(defId) {
     const def = BLOCKS[defId];
     if (def.kind === "container") {
-      const fields =
-        defId === "amount"
-          ? { mode: "atLeast", n: "1", m: "1", lazy: "false", collapsed: "false" }
-          : {};
+      let fields;
+      if (defId === "amount") {
+        fields = { mode: "atLeast", n: "1", m: "1", lazy: "false", collapsed: "false" };
+      } else if (defId === "group") {
+        fields = { name: "", collapsed: "false" };
+      } else {
+        fields = { collapsed: "false" };
+      }
       return { uid: ++uidCounter, defId, fields, children: [] };
+    }
+    if (defId === "matchGroup") {
+      return { uid: ++uidCounter, defId, fields: { refUid: "", expanded: "false" } };
     }
     const fields = {};
     (def.fields || []).forEach((f) => {
@@ -426,7 +573,7 @@
     return {
       uid: ++uidCounter,
       defId: "group",
-      fields: { name: "" },
+      fields: { name: "", collapsed: "false" },
       children: sourceNodes.map(cloneTree),
     };
   }
@@ -464,6 +611,7 @@
   }
 
   function computeRegex(list) {
+    matchGroupResolutionStack = [];
     const pattern = list
       .map(computeNode)
       .filter((f) => f !== "")
@@ -497,13 +645,14 @@
   function newParsedNode(defId, fields, children) {
     const def = BLOCKS[defId];
     if (def.kind === "container") {
-      const finalFields = {};
+      const finalFields = { collapsed: "false" };
       if (defId === "amount") {
         finalFields.mode = (fields && fields.mode) || "atLeast";
         finalFields.n = fields && fields.n !== undefined ? String(fields.n) : "1";
         finalFields.m = fields && fields.m !== undefined ? String(fields.m) : "1";
         finalFields.lazy = (fields && fields.lazy) || "false";
-        finalFields.collapsed = "false";
+      } else if (defId === "group") {
+        finalFields.name = (fields && fields.name) || "";
       }
       return { uid: ++uidCounter, defId, fields: finalFields, children: children || [] };
     }
@@ -760,6 +909,9 @@
   const ignoreCaseEl = document.getElementById("ignoreCase");
   const bookmarksBoxEl = document.getElementById("bookmarksBox");
   const bookmarkBtn = document.getElementById("bookmarkBtn");
+  const outputModeSwitchEl = document.getElementById("outputModeSwitch");
+
+  let outputMode = "highlight"; // 'highlight' | 'onlyMatches' | 'removed'
 
   workbenchEl.classList.add("dropzone");
   workbenchEl.dataset.owner = "root";
@@ -812,12 +964,81 @@
     return removeBtn;
   }
 
+  // Two diagonal corner-brackets at 45 degrees: pulled apart (pointing
+  // away from each other) to mean "expand", pulled together (pointing
+  // toward each other) to mean "collapse".
+  const EXPAND_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M9 3 L3 3 L3 9"/><path d="M15 21 L21 21 L21 15"/></svg>';
+  const COLLAPSE_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3 9 L9 9 L9 3"/><path d="M21 15 L15 15 L15 21"/></svg>';
+
+  function makeCollapseToggle(isCollapsed, onToggle) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "collapse-toggle-btn";
+    btn.title = isCollapsed ? "Expand" : "Collapse";
+    btn.innerHTML = isCollapsed ? EXPAND_ICON_SVG : COLLAPSE_ICON_SVG;
+    btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    btn.addEventListener("click", onToggle);
+    return btn;
+  }
+
+  const FOLDER_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>';
+  const BOOKMARK_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M6 3h12v18l-6-4-6 4V3z"/></svg>';
+
+  function renderGroupHeader(headerEl, inst) {
+    const hasName = !!(inst.fields.name && inst.fields.name.trim());
+
+    const icon = document.createElement("span");
+    icon.className = "group-icon";
+    icon.innerHTML = hasName ? BOOKMARK_ICON_SVG : FOLDER_ICON_SVG;
+    headerEl.appendChild(icon);
+
+    headerEl.appendChild(document.createTextNode("group:"));
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "group-name-input";
+    nameInput.placeholder = "name";
+    nameInput.value = inst.fields.name || "";
+    nameInput.addEventListener("pointerdown", (e) => e.stopPropagation());
+    nameInput.addEventListener("input", () => {
+      inst.fields.name = nameInput.value;
+    });
+    nameInput.addEventListener("blur", () => {
+      // Re-render only now (not on every keystroke) so the folder/
+      // bookmark icon reflects the current name without disrupting
+      // an in-progress edit.
+      renderWorkbench();
+      recompute();
+    });
+    headerEl.appendChild(nameInput);
+  }
+
+  function makeBlockIcon(defId) {
+    const def = BLOCKS[defId];
+    if (!def.icon) return null;
+    const span = document.createElement("span");
+    span.className = "block-icon";
+    span.textContent = def.icon;
+    return span;
+  }
+
   function buildLeafChip(inst, isToolboxPreview) {
     const def = BLOCKS[inst.defId];
     const chip = document.createElement("div");
     chip.className = `${isToolboxPreview ? "block" : "wb-chip"} cat-${def.category}`;
     if (isToolboxPreview) chip.dataset.def = inst.defId;
     else chip.dataset.uid = inst.uid;
+
+    const icon = makeBlockIcon(inst.defId);
+    if (icon) chip.appendChild(icon);
 
     labelParts(def).forEach((part) => {
       if (part.text !== undefined) {
@@ -906,18 +1127,8 @@
   function renderAmountHeader(headerEl, inst) {
     const isCollapsed = inst.fields.collapsed === "true";
 
-    const collapseBtn = document.createElement("button");
-    collapseBtn.type = "button";
-    collapseBtn.className = "collapse-btn";
-    collapseBtn.textContent = isCollapsed ? "▸" : "▾";
-    collapseBtn.title = isCollapsed ? "Expand" : "Collapse";
-    collapseBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    collapseBtn.addEventListener("click", () => {
-      inst.fields.collapsed = isCollapsed ? "false" : "true";
-      renderWorkbench();
-      recompute();
-    });
-    headerEl.appendChild(collapseBtn);
+    const icon = makeBlockIcon("amount");
+    if (icon) headerEl.appendChild(icon);
 
     if (isCollapsed) {
       const summary = document.createElement("span");
@@ -978,14 +1189,30 @@
     chip.className = `wb-chip container-chip cat-${def.category}`;
     chip.dataset.uid = inst.uid;
 
+    const isCollapsed = inst.fields.collapsed === "true";
+
+    chip.appendChild(
+      makeCollapseToggle(isCollapsed, () => {
+        inst.fields.collapsed = isCollapsed ? "false" : "true";
+        renderWorkbench();
+        recompute();
+      })
+    );
+
     const header = document.createElement("div");
     header.className = "container-header";
     if (inst.defId === "amount") {
       renderAmountHeader(header, inst);
+    } else if (inst.defId === "group") {
+      renderGroupHeader(header, inst);
     } else {
+      const icon = makeBlockIcon(inst.defId);
+      if (icon) header.appendChild(icon);
       header.appendChild(document.createTextNode(def.label));
     }
-    header.appendChild(
+    chip.appendChild(header);
+
+    chip.appendChild(
       makeRemoveButton(() => {
         const loc = findParentArrayAndIndex(workbenchState, inst.uid);
         if (loc) loc.array.splice(loc.index, 1);
@@ -993,23 +1220,93 @@
         recompute();
       })
     );
-    chip.appendChild(header);
 
-    const dropzone = document.createElement("div");
-    dropzone.className = "dropzone";
-    dropzone.dataset.owner = String(inst.uid);
-    if (inst.children.length === 0) {
-      const hint = document.createElement("div");
-      hint.className = "dropzone-empty-hint";
-      hint.textContent = "drop here";
-      dropzone.appendChild(hint);
-    } else {
-      inst.children.forEach((child) => dropzone.appendChild(renderNode(child)));
+    if (!isCollapsed) {
+      const dropzone = document.createElement("div");
+      dropzone.className = "dropzone";
+      dropzone.dataset.owner = String(inst.uid);
+      if (inst.children.length === 0) {
+        const hint = document.createElement("div");
+        hint.className = "dropzone-empty-hint";
+        hint.textContent = "drop here";
+        dropzone.appendChild(hint);
+      } else {
+        inst.children.forEach((child) => dropzone.appendChild(renderNode(child)));
+      }
+      chip.appendChild(dropzone);
+
+      if (inst.defId === "amount" && LAZY_TOGGLE_MODES.includes(inst.fields.mode)) {
+        chip.appendChild(makeGreedyLazyToggle(inst));
+      }
     }
-    chip.appendChild(dropzone);
 
-    if (inst.defId === "amount" && LAZY_TOGGLE_MODES.includes(inst.fields.mode)) {
-      chip.appendChild(makeGreedyLazyToggle(inst));
+    return chip;
+  }
+
+  function listNamedGroups(list, results) {
+    results = results || [];
+    for (const node of list) {
+      if (node.defId === "group" && node.fields.name && node.fields.name.trim()) {
+        results.push(node);
+      }
+      if (node.children) listNamedGroups(node.children, results);
+    }
+    return results;
+  }
+
+  function buildMatchGroupChip(inst) {
+    const chip = document.createElement("div");
+    chip.className = "wb-chip cat-logic";
+    chip.dataset.uid = inst.uid;
+
+    const icon = makeBlockIcon("matchGroup");
+    if (icon) chip.appendChild(icon);
+    chip.appendChild(document.createTextNode("match group:"));
+
+    const select = document.createElement("select");
+    select.className = "amount-mode-select";
+    const placeholderOpt = document.createElement("option");
+    placeholderOpt.value = "";
+    placeholderOpt.textContent = "— choose —";
+    select.appendChild(placeholderOpt);
+    listNamedGroups(workbenchState).forEach((g) => {
+      const opt = document.createElement("option");
+      opt.value = String(g.uid);
+      opt.textContent = g.fields.name;
+      if (inst.fields.refUid === String(g.uid)) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener("pointerdown", (e) => e.stopPropagation());
+    select.addEventListener("change", () => {
+      inst.fields.refUid = select.value;
+      recompute();
+    });
+    chip.appendChild(select);
+
+    const isExpanded = inst.fields.expanded === "true";
+    const toggle = makeCollapseToggle(!isExpanded, () => {
+      inst.fields.expanded = isExpanded ? "false" : "true";
+      renderWorkbench();
+    });
+    toggle.classList.add("inline-expand-toggle");
+    chip.appendChild(toggle);
+
+    chip.appendChild(
+      makeRemoveButton(() => {
+        const loc = findParentArrayAndIndex(workbenchState, inst.uid);
+        if (loc) loc.array.splice(loc.index, 1);
+        renderWorkbench();
+        recompute();
+      })
+    );
+
+    if (isExpanded) {
+      chip.classList.add("match-group-expanded");
+      const preview = document.createElement("div");
+      preview.className = "match-group-preview";
+      const target = findInstanceByUid(workbenchState, parseInt(inst.fields.refUid, 10));
+      preview.textContent = target ? computeNode(target) || "(empty)" : "(no group selected)";
+      chip.appendChild(preview);
     }
 
     return chip;
@@ -1017,6 +1314,7 @@
 
   function renderNode(inst) {
     const def = BLOCKS[inst.defId];
+    if (inst.defId === "matchGroup") return buildMatchGroupChip(inst);
     if (def.kind === "container") return buildContainerChip(inst);
     return buildLeafChip(inst, false);
   }
@@ -1197,6 +1495,36 @@
     });
   }
 
+  function renderHighlightedOutput(re, text) {
+    outputBoxEl.innerHTML = "";
+    let lastIndex = 0;
+    let match;
+    let guard = 0;
+    re.lastIndex = 0;
+    while ((match = re.exec(text)) !== null && guard < 20000) {
+      guard++;
+      if (match.index > lastIndex) {
+        outputBoxEl.appendChild(
+          document.createTextNode(text.slice(lastIndex, match.index))
+        );
+      }
+      if (match[0].length === 0) {
+        re.lastIndex++;
+        if (match.index >= text.length) break;
+        outputBoxEl.appendChild(document.createTextNode(text[match.index]));
+        lastIndex = match.index + 1;
+        continue;
+      }
+      const mark = document.createElement("mark");
+      mark.textContent = match[0];
+      outputBoxEl.appendChild(mark);
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+      outputBoxEl.appendChild(document.createTextNode(text.slice(lastIndex)));
+    }
+  }
+
   function recompute() {
     let result;
     let patternError = null;
@@ -1250,33 +1578,29 @@
       return;
     }
 
-    outputBoxEl.innerHTML = "";
-    let lastIndex = 0;
-    let match;
-    let guard = 0;
-    re.lastIndex = 0;
-    while ((match = re.exec(text)) !== null && guard < 20000) {
-      guard++;
-      if (match.index > lastIndex) {
-        outputBoxEl.appendChild(
-          document.createTextNode(text.slice(lastIndex, match.index))
-        );
-      }
-      if (match[0].length === 0) {
-        re.lastIndex++;
-        if (match.index >= text.length) break;
-        outputBoxEl.appendChild(document.createTextNode(text[match.index]));
-        lastIndex = match.index + 1;
-        continue;
-      }
-      const mark = document.createElement("mark");
-      mark.textContent = match[0];
-      outputBoxEl.appendChild(mark);
-      lastIndex = match.index + match[0].length;
+    if (outputMode === "removed") {
+      outputBoxEl.textContent = text.replace(re, "");
+      return;
     }
-    if (lastIndex < text.length) {
-      outputBoxEl.appendChild(document.createTextNode(text.slice(lastIndex)));
+
+    if (outputMode === "onlyMatches") {
+      const matches = [];
+      let guard = 0;
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(text)) !== null && guard < 20000) {
+        guard++;
+        if (m[0]) matches.push(m[0]);
+        if (m[0].length === 0) {
+          re.lastIndex++;
+          if (re.lastIndex > text.length) break;
+        }
+      }
+      outputBoxEl.textContent = matches.join("\n");
+      return;
     }
+
+    renderHighlightedOutput(re, text);
   }
 
   // ---------------------------------------------------------------------
@@ -1565,6 +1889,16 @@
 
   textInputEl.addEventListener("input", recompute);
   ignoreCaseEl.addEventListener("change", recompute);
+
+  outputModeSwitchEl.querySelectorAll(".output-mode-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      outputMode = btn.dataset.mode;
+      outputModeSwitchEl
+        .querySelectorAll(".output-mode-btn")
+        .forEach((b) => b.classList.toggle("active", b === btn));
+      recompute();
+    });
+  });
 
   async function copyToClipboard(text, btn) {
     if (!text) return;
