@@ -373,9 +373,13 @@ input.field-input.char-input {
   justify-content: center;
   gap: 10px;
   padding-top: 2px;
+  width: 100%;
+  overflow-x: auto;
 }
 
 .greedy-toggle-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-size: 11px;
   color: #aaa;
   font-weight: 400;
