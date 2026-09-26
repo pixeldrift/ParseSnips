@@ -44,6 +44,21 @@ body {
     padding-right: 0;
     padding-bottom: 20px;
   }
+
+  /* On a phone, a full-length Toolbox + Saved Patterns list can run to
+     several screens, burying the Workbench far below the fold -- and
+     since dragging uses Pointer Events rather than native HTML5 drag
+     (see the auto-scroll handling in script.js), the page can only
+     auto-scroll during an active drag, not eliminate the need for one.
+     Capping these two lists to their own short, internally-scrolling
+     panels keeps the whole sidebar compact so the Workbench is only a
+     short scroll (often no scroll at all) away. */
+  #toolbox,
+  .bookmarks-box {
+    max-height: 32vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .logo {

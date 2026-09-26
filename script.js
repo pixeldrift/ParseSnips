@@ -1891,6 +1891,9 @@
     dragGhost.textContent = ghostLabel;
     document.body.appendChild(dragGhost);
     moveGhost(e);
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+    startAutoScroll();
 
     document.addEventListener("pointermove", onDragMove);
     document.addEventListener("pointerup", onDragEnd);
@@ -1903,6 +1906,56 @@
     dragGhost.style.top = e.clientY + "px";
   }
 
+  function updateDragOverHighlight(x, y) {
+    const dz = resolveDropzone(x, y);
+    document
+      .querySelectorAll(".dropzone.drag-over")
+      .forEach((el) => el.classList.remove("drag-over"));
+    bookmarksBoxEl.classList.remove("drag-over-bookmarks");
+    if (dz) dz.classList.add("drag-over");
+    else if (dragMode === "move" && resolveBookmarksBox(x, y)) {
+      bookmarksBoxEl.classList.add("drag-over-bookmarks");
+    }
+  }
+
+  // Pointer Events don't get the auto-scroll a native HTML5 drag would
+  // near a scroll container's edge, so on a tall, scrolled page (chiefly
+  // mobile, where the Workbench can start well below the fold) a drag
+  // could never reach an off-screen drop target at all. Scroll the page
+  // ourselves whenever the pointer sits near the top/bottom of the
+  // viewport while a drag is active -- speed ramps up the closer the
+  // pointer gets to the very edge.
+  const AUTO_SCROLL_EDGE_PX = 70;
+  const AUTO_SCROLL_MAX_SPEED = 16;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+  let autoScrollRAF = null;
+
+  function autoScrollTick() {
+    if (!dragMode) {
+      autoScrollRAF = null;
+      return;
+    }
+    const vh = window.innerHeight;
+    let dy = 0;
+    if (lastPointerY < AUTO_SCROLL_EDGE_PX) {
+      dy = -AUTO_SCROLL_MAX_SPEED * (1 - lastPointerY / AUTO_SCROLL_EDGE_PX);
+    } else if (lastPointerY > vh - AUTO_SCROLL_EDGE_PX) {
+      dy = AUTO_SCROLL_MAX_SPEED * (1 - (vh - lastPointerY) / AUTO_SCROLL_EDGE_PX);
+    }
+    if (dy !== 0) {
+      window.scrollBy(0, dy);
+      // The pointer hasn't actually moved -- content has scrolled under
+      // it -- so re-resolve what's now underneath it.
+      updateDragOverHighlight(lastPointerX, lastPointerY);
+    }
+    autoScrollRAF = requestAnimationFrame(autoScrollTick);
+  }
+
+  function startAutoScroll() {
+    if (autoScrollRAF === null) autoScrollRAF = requestAnimationFrame(autoScrollTick);
+  }
+
   function onDragMove(e) {
     if (e.pointerId !== activePointerId) return;
     if (
@@ -1911,16 +1964,10 @@
     ) {
       dragMoved = true;
     }
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
     moveGhost(e);
-    const dz = resolveDropzone(e.clientX, e.clientY);
-    document
-      .querySelectorAll(".dropzone.drag-over")
-      .forEach((el) => el.classList.remove("drag-over"));
-    bookmarksBoxEl.classList.remove("drag-over-bookmarks");
-    if (dz) dz.classList.add("drag-over");
-    else if (dragMode === "move" && resolveBookmarksBox(e.clientX, e.clientY)) {
-      bookmarksBoxEl.classList.add("drag-over-bookmarks");
-    }
+    updateDragOverHighlight(e.clientX, e.clientY);
   }
 
   function endDragCleanup() {
@@ -1945,6 +1992,10 @@
     dragBookmarkId = null;
     dragSourceEl = null;
     activePointerId = null;
+    if (autoScrollRAF !== null) {
+      cancelAnimationFrame(autoScrollRAF);
+      autoScrollRAF = null;
+    }
   }
 
   function onDragEnd(e) {
