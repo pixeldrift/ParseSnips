@@ -213,16 +213,7 @@ input.field-input.char-input {
   background: #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   padding: 20px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
   position: relative;
-}
-
-.workbench.drag-over {
-  background: #f7fbff;
-  border-color: #7fb4e8;
 }
 
 .workbench-placeholder {
@@ -231,27 +222,29 @@ input.field-input.char-input {
   font-family: "Courier New", Courier, monospace;
 }
 
-.chip-group {
+/* A drop zone is either the root workbench itself, or the nested slot
+   inside a container block. Both hold a flat, ordered row of chips that
+   wraps like the toolbox does. */
+
+.dropzone {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  border: 1px solid #999;
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: #fafafa;
-  position: relative;
+  gap: 10px;
 }
 
-.chip-group.incomplete {
-  border-style: dashed;
-  border-color: #d99;
-  background: #fff6f6;
+.dropzone.drag-over {
+  background: #f7fbff;
+  outline: 2px solid #7fb4e8;
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
-.plus-sep {
-  font-weight: bold;
-  color: #666;
-  padding: 0 2px;
+.dropzone-empty-hint {
+  color: #aaa;
+  font-style: italic;
+  font-size: 12px;
+  padding: 4px 2px;
 }
 
 .wb-chip {
@@ -294,6 +287,74 @@ input.field-input.char-input {
   background: #922b21;
 }
 
+/* Container blocks (amount, not, group, either, lookaround) hold a
+   nested drop zone below their header, so they stack vertically
+   instead of sitting inline like a plain atom chip. */
+
+.wb-chip.container-chip {
+  flex-direction: column;
+  align-items: stretch;
+  border-radius: 12px;
+  padding: 10px;
+  gap: 8px;
+  cursor: default;
+}
+
+.container-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  cursor: grab;
+}
+
+.container-header:active {
+  cursor: grabbing;
+}
+
+.container-header .remove-btn {
+  margin-left: auto;
+}
+
+.container-chip .dropzone {
+  border: 1px dashed #aaa;
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  min-height: 40px;
+}
+
+.collapse-btn {
+  border: 1px solid #aaa;
+  background: #fff;
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.collapse-btn:hover {
+  background: #f0f0f0;
+}
+
+.amount-mode-select {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 2px 4px;
+  border: 1px solid #999;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.amount-summary {
+  font-style: italic;
+  color: #333;
+}
+
 @media (pointer: coarse) {
   .wb-chip {
     padding: 8px 14px;
@@ -305,6 +366,21 @@ input.field-input.char-input {
     height: 24px;
     font-size: 15px;
     line-height: 24px;
+  }
+
+  .collapse-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .amount-mode-select {
+    font-size: 15px;
+    padding: 5px 6px;
+  }
+
+  .container-chip .dropzone {
+    padding: 10px;
   }
 }
 
@@ -363,6 +439,32 @@ input.field-input.char-input {
 
   .copy-btn {
     flex: 1 1 auto;
+  }
+}
+
+.flag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #444;
+  margin-top: 8px;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.flag-row input {
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .flag-row {
+    font-size: 14px;
+  }
+
+  .flag-row input {
+    width: 18px;
+    height: 18px;
   }
 }
 

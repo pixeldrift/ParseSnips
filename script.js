@@ -3,6 +3,17 @@
 
   // ---------------------------------------------------------------------
   // Block definitions
+  //
+  // Two kinds of blocks:
+  //  - "atom" / "action": leaves. compute(fields) -> regex fragment.
+  //  - "container": have a nested drop zone holding a sequence of child
+  //    blocks. wrap(inner, fields) -> regex fragment, where `inner` is
+  //    the already-computed concatenation (or alternation) of the
+  //    container's children.
+  //
+  // Every container label ends in ":" to signal "this block holds a
+  // drop zone"; no other block does. That's the one formatting rule
+  // that distinguishes the two categories at a glance.
   // ---------------------------------------------------------------------
 
   function escapeLiteral(str) {
@@ -16,6 +27,100 @@
   function clampInt(v) {
     const n = parseInt(v, 10);
     return Number.isFinite(n) && n >= 0 ? n : 0;
+  }
+
+  function isAlreadyGrouped(s) {
+    if (s.length < 2 || s[0] !== "(" || s[s.length - 1] !== ")") return false;
+    let depth = 0;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === "\\") {
+        i++;
+        continue;
+      }
+      if (ch === "(") depth++;
+      else if (ch === ")") {
+        depth--;
+        if (depth === 0 && i < s.length - 1) return false;
+      }
+    }
+    return depth === 0;
+  }
+
+  function isSingleUnit(s) {
+    if (s.length === 1) return true;
+    if (/^\\.$/.test(s)) return true;
+    if (/^\[.*\]$/.test(s)) return true;
+    if (isAlreadyGrouped(s)) return true;
+    return false;
+  }
+
+  function negateBase(base) {
+    if (base === "") return base;
+    const m = base.match(/^\[\^(.*)\]$/);
+    if (m) return `[${m[1]}]`;
+    const m2 = base.match(/^\[(.*)\]$/);
+    if (m2) return `[^${m2[1]}]`;
+    if (base === "\\w") return "\\W";
+    if (base === "\\d") return "\\D";
+    if (base === "\\s") return "\\S";
+    if (base === ".") return base;
+    return `(?:(?!${base}).)`;
+  }
+
+  const AMOUNT_MODES = [
+    { value: "single", label: "a single occurrence" },
+    { value: "exactly", label: "exactly" },
+    { value: "atLeast", label: "at least" },
+    { value: "upTo", label: "up to" },
+    { value: "between", label: "between" },
+    { value: "moreThan", label: "more than" },
+    { value: "few", label: "as few as possible" },
+    { value: "many", label: "as many as possible" },
+  ];
+
+  function amountSuffix(fields) {
+    const n = clampInt(fields.n);
+    const m = clampInt(fields.m);
+    switch (fields.mode) {
+      case "single":
+        return "";
+      case "exactly":
+        return `{${n}}`;
+      case "atLeast":
+        return `{${n},}`;
+      case "upTo":
+        return `{0,${n}}`;
+      case "between": {
+        const lo = Math.min(n, m);
+        const hi = Math.max(n, m);
+        return `{${lo},${hi}}`;
+      }
+      case "moreThan":
+        return `{${n + 1},}`;
+      case "few":
+        return "*?";
+      case "many":
+        return "*";
+      default:
+        return "";
+    }
+  }
+
+  function amountSummary(fields) {
+    const mode = AMOUNT_MODES.find((m) => m.value === fields.mode);
+    const label = mode ? mode.label : fields.mode;
+    switch (fields.mode) {
+      case "exactly":
+      case "atLeast":
+      case "upTo":
+      case "moreThan":
+        return `${label} ${fields.n}`;
+      case "between":
+        return `${label} ${fields.n}-${fields.m}`;
+      default:
+        return label;
+    }
   }
 
   const BLOCKS = {
@@ -37,16 +142,6 @@
       fields: [],
       compute: () => ".",
     },
-    not: {
-      kind: "negate",
-      label: "not",
-      fields: [],
-    },
-    or: {
-      kind: "combinator",
-      label: "or",
-      fields: [],
-    },
     uppercase: {
       kind: "atom",
       label: "uppercase",
@@ -58,66 +153,6 @@
       label: "lowercase",
       fields: [],
       compute: () => "[a-z]",
-    },
-    singleOcc: {
-      kind: "quantifier",
-      label: "a single occurrence of",
-      fields: [],
-      suffix: () => "",
-    },
-    exactly: {
-      kind: "quantifier",
-      label: "exactly {n} occurrences of",
-      fields: [{ name: "n", kind: "number", default: 1 }],
-      suffix: (f) => `{${clampInt(f.n)}}`,
-    },
-    atLeast: {
-      kind: "quantifier",
-      label: "at least {n} or more occurrences of",
-      fields: [{ name: "n", kind: "number", default: 1 }],
-      suffix: (f) => `{${clampInt(f.n)},}`,
-    },
-    upTo: {
-      kind: "quantifier",
-      label: "up to {n} occurrences of",
-      fields: [{ name: "n", kind: "number", default: 1 }],
-      suffix: (f) => `{0,${clampInt(f.n)}}`,
-    },
-    between: {
-      kind: "quantifier",
-      label: "between {n} to {m} occurrences of",
-      fields: [
-        { name: "n", kind: "number", default: 1 },
-        { name: "m", kind: "number", default: 1 },
-      ],
-      suffix: (f) => {
-        let n = clampInt(f.n);
-        let m = clampInt(f.m);
-        if (n > m) {
-          const tmp = n;
-          n = m;
-          m = tmp;
-        }
-        return `{${n},${m}}`;
-      },
-    },
-    moreThan: {
-      kind: "quantifier",
-      label: "more than {n} occurrences of",
-      fields: [{ name: "n", kind: "number", default: 1 }],
-      suffix: (f) => `{${clampInt(f.n) + 1},}`,
-    },
-    fewAsPossible: {
-      kind: "quantifier",
-      label: "as few as possible of",
-      fields: [],
-      suffix: () => "*?",
-    },
-    manyAsPossible: {
-      kind: "quantifier",
-      label: "as many as possible of",
-      fields: [],
-      suffix: () => "*",
     },
     character: {
       kind: "atom",
@@ -147,8 +182,7 @@
       kind: "atom",
       label: "word",
       fields: [],
-      compute: () => "\\w",
-      defaultSuffix: "+",
+      compute: () => "\\w+",
     },
     letterRange: {
       kind: "atom",
@@ -164,189 +198,88 @@
       },
     },
     fromBeginning: {
-      kind: "anchor",
+      kind: "atom",
       label: "from the beginning",
       fields: [],
-      symbol: "^",
+      compute: () => "^",
     },
     toEnd: {
-      kind: "anchor",
+      kind: "atom",
       label: "to the end",
       fields: [],
-      symbol: "$",
+      compute: () => "$",
     },
     replaceWith: {
       kind: "action",
       label: "replace with {text}",
       fields: [{ name: "text", kind: "text", placeholder: "replacement" }],
     },
+
+    // -- containers: each holds a nested drop zone -----------------------
+    group: {
+      kind: "container",
+      label: "group:",
+      childJoin: "concat",
+      wrap: (inner) => (isAlreadyGrouped(inner) ? inner : `(?:${inner})`),
+    },
+    not: {
+      kind: "container",
+      label: "not:",
+      childJoin: "concat",
+      wrap: (inner) => negateBase(inner),
+    },
+    or: {
+      kind: "container",
+      label: "either:",
+      childJoin: "alternate",
+      wrap: (inner) => `(?:${inner})`,
+    },
+    lookahead: {
+      kind: "container",
+      label: "followed by:",
+      childJoin: "concat",
+      wrap: (inner) => `(?=${inner})`,
+    },
+    notLookahead: {
+      kind: "container",
+      label: "not followed by:",
+      childJoin: "concat",
+      wrap: (inner) => `(?!${inner})`,
+    },
+    lookbehind: {
+      kind: "container",
+      label: "preceded by:",
+      childJoin: "concat",
+      wrap: (inner) => `(?<=${inner})`,
+    },
+    notLookbehind: {
+      kind: "container",
+      label: "not preceded by:",
+      childJoin: "concat",
+      wrap: (inner) => `(?<!${inner})`,
+    },
+    amount: {
+      kind: "container",
+      label: "amount:",
+      childJoin: "concat",
+      // wrap handled specially in computeNode (needs the mode dropdown)
+    },
   };
 
-  // Single source of truth for the toolbox layout. The DOM for these
-  // blocks is generated from BLOCKS below, so labels only ever live here.
+  // Single source of truth for the toolbox layout. The DOM is generated
+  // from BLOCKS, so labels only ever live in one place.
   const TOOLBOX_GROUPS = [
-    ["literal", "anyOf", "anything", "not", "or"],
+    ["literal", "anyOf", "anything", "not", "or", "group"],
     ["uppercase", "lowercase"],
-    [
-      "singleOcc",
-      "exactly",
-      "atLeast",
-      "upTo",
-      "between",
-      "moreThan",
-      "fewAsPossible",
-      "manyAsPossible",
-    ],
+    ["amount"],
     ["character", "letter", "digit", "letterOrDigit", "word", "letterRange"],
     ["fromBeginning", "toEnd"],
+    ["lookahead", "notLookahead", "lookbehind", "notLookbehind"],
     ["replaceWith"],
   ];
 
   // ---------------------------------------------------------------------
-  // Regex fragment helpers
-  // ---------------------------------------------------------------------
-
-  function isSingleUnit(s) {
-    if (s.length === 1) return true;
-    if (/^\\.$/.test(s)) return true;
-    if (/^\[.*\]$/.test(s)) return true;
-    return false;
-  }
-
-  function negateBase(base) {
-    const m = base.match(/^\[\^(.*)\]$/);
-    if (m) return `[${m[1]}]`;
-    const m2 = base.match(/^\[(.*)\]$/);
-    if (m2) return `[^${m2[1]}]`;
-    if (base === "\\w") return "\\W";
-    if (base === "\\d") return "\\D";
-    if (base === "\\s") return "\\S";
-    if (base === ".") return base;
-    return `(?:(?!${base}).)`;
-  }
-
-  function computeRegex(list) {
-    const fragments = [];
-    let i = 0;
-
-    while (i < list.length) {
-      const inst = list[i];
-      const def = BLOCKS[inst.defId];
-
-      if (def.kind === "combinator") {
-        fragments.push({ type: "or" });
-        i++;
-        continue;
-      }
-
-      if (def.kind === "quantifier" || def.kind === "negate") {
-        const mods = [inst];
-        let j = i + 1;
-        while (
-          j < list.length &&
-          (BLOCKS[list[j].defId].kind === "quantifier" ||
-            BLOCKS[list[j].defId].kind === "negate")
-        ) {
-          mods.push(list[j]);
-          j++;
-        }
-        if (j >= list.length) {
-          // dangling modifiers with nothing to apply to
-          break;
-        }
-        const terminal = list[j];
-        const tdef = BLOCKS[terminal.defId];
-
-        if (tdef.kind === "anchor") {
-          fragments.push({ type: "pattern", value: tdef.symbol });
-          i = j + 1;
-          continue;
-        }
-        if (tdef.kind === "action") {
-          i = j + 1;
-          continue;
-        }
-        if (tdef.kind === "atom") {
-          let base = tdef.compute(terminal.fields);
-          const quantInst = mods.find(
-            (m) => BLOCKS[m.defId].kind === "quantifier"
-          );
-          const negateApplied = mods.some(
-            (m) => BLOCKS[m.defId].kind === "negate"
-          );
-          if (negateApplied) base = negateBase(base);
-          const suffix = quantInst
-            ? BLOCKS[quantInst.defId].suffix(quantInst.fields)
-            : tdef.defaultSuffix || "";
-          const frag = suffix
-            ? isSingleUnit(base)
-              ? base + suffix
-              : `(?:${base})${suffix}`
-            : base;
-          fragments.push({ type: "pattern", value: frag });
-        }
-        i = j + 1;
-        continue;
-      }
-
-      if (def.kind === "atom") {
-        const base = def.compute(inst.fields);
-        const suffix = def.defaultSuffix || "";
-        const frag = suffix
-          ? isSingleUnit(base)
-            ? base + suffix
-            : `(?:${base})${suffix}`
-          : base;
-        fragments.push({ type: "pattern", value: frag });
-        i++;
-        continue;
-      }
-
-      if (def.kind === "anchor") {
-        fragments.push({ type: "pattern", value: def.symbol });
-        i++;
-        continue;
-      }
-
-      if (def.kind === "action") {
-        i++;
-        continue;
-      }
-
-      i++;
-    }
-
-    const folded = [];
-    for (let k = 0; k < fragments.length; k++) {
-      const f = fragments[k];
-      if (f.type === "or") {
-        if (folded.length === 0 || k + 1 >= fragments.length) {
-          continue; // dangling "or", ignore
-        }
-        const prev = folded.pop();
-        const next = fragments[++k];
-        folded.push({
-          type: "pattern",
-          value: `(?:${prev.value}|${next.value})`,
-        });
-      } else {
-        folded.push(f);
-      }
-    }
-
-    const pattern = folded.map((f) => f.value).join("");
-
-    let replacement = null;
-    const actionInst = list.find((x) => BLOCKS[x.defId].kind === "action");
-    if (actionInst) {
-      replacement = (actionInst.fields.text || "").replace(/\$/g, "$$$$");
-    }
-
-    return { pattern, replacement };
-  }
-
-  // ---------------------------------------------------------------------
-  // Workbench state
+  // Tree state
   // ---------------------------------------------------------------------
 
   let uidCounter = 0;
@@ -354,29 +287,104 @@
 
   function makeInstance(defId) {
     const def = BLOCKS[defId];
+    if (def.kind === "container") {
+      const fields =
+        defId === "amount"
+          ? { mode: "atLeast", n: "1", m: "1", collapsed: "false" }
+          : {};
+      return { uid: ++uidCounter, defId, fields, children: [] };
+    }
     const fields = {};
-    def.fields.forEach((f) => {
+    (def.fields || []).forEach((f) => {
       fields[f.name] = f.default !== undefined ? String(f.default) : "";
     });
     return { uid: ++uidCounter, defId, fields };
   }
 
-  function groupInstances(list) {
-    const groups = [];
-    let current = [];
-    list.forEach((inst) => {
-      const def = BLOCKS[inst.defId];
-      current.push(inst);
-      if (def.kind === "quantifier" || def.kind === "negate") {
-        return; // keep accumulating
+  function findParentArrayAndIndex(list, uid) {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].uid === uid) return { array: list, index: i };
+      if (list[i].children) {
+        const res = findParentArrayAndIndex(list[i].children, uid);
+        if (res) return res;
       }
-      groups.push({ items: current, complete: true });
-      current = [];
-    });
-    if (current.length) {
-      groups.push({ items: current, complete: false });
     }
-    return groups;
+    return null;
+  }
+
+  function findInstanceByUid(list, uid) {
+    for (const inst of list) {
+      if (inst.uid === uid) return inst;
+      if (inst.children) {
+        const found = findInstanceByUid(inst.children, uid);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function subtreeContainsUid(inst, uid) {
+    if (inst.uid === uid) return true;
+    if (inst.children) return inst.children.some((c) => subtreeContainsUid(c, uid));
+    return false;
+  }
+
+  function findAction(list) {
+    for (const inst of list) {
+      if (BLOCKS[inst.defId].kind === "action") return inst;
+      if (inst.children) {
+        const found = findAction(inst.children);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------
+  // Regex computation (recursive tree walk)
+  // ---------------------------------------------------------------------
+
+  function computeNode(inst) {
+    const def = BLOCKS[inst.defId];
+    if (def.kind === "atom") return def.compute(inst.fields);
+    if (def.kind === "action") return "";
+
+    const childFragments = (inst.children || [])
+      .map(computeNode)
+      .filter((f) => f !== "");
+    const inner =
+      def.childJoin === "alternate"
+        ? childFragments.join("|")
+        : childFragments.join("");
+
+    if (inner === "") return "";
+
+    if (inst.defId === "amount") {
+      const suffix = amountSuffix(inst.fields);
+      if (!suffix) return inner;
+      return (isSingleUnit(inner) ? inner : `(?:${inner})`) + suffix;
+    }
+
+    // An alternation with only one surviving branch isn't really an
+    // alternation (yet) -- don't wrap it in a redundant group.
+    if (inst.defId === "or" && childFragments.length <= 1) return inner;
+
+    return def.wrap(inner, inst.fields);
+  }
+
+  function computeRegex(list) {
+    const pattern = list
+      .map(computeNode)
+      .filter((f) => f !== "")
+      .join("");
+
+    let replacement = null;
+    const actionInst = findAction(list);
+    if (actionInst) {
+      replacement = (actionInst.fields.text || "").replace(/\$/g, "$$$$");
+    }
+
+    return { pattern, replacement };
   }
 
   // ---------------------------------------------------------------------
@@ -390,9 +398,12 @@
   const outputBoxEl = document.getElementById("outputBox");
   const copyBtn = document.getElementById("copyBtn");
   const clearBtn = document.getElementById("clearWorkbench");
+  const ignoreCaseEl = document.getElementById("ignoreCase");
+
+  workbenchEl.classList.add("dropzone");
+  workbenchEl.dataset.owner = "root";
 
   function labelParts(def) {
-    // splits "exactly {n} occurrences of" into text/field tokens
     const parts = [];
     const re = /\{(\w+)\}/g;
     let last = 0;
@@ -406,15 +417,46 @@
     return parts;
   }
 
-  function buildChip(inst, isToolboxPreview) {
+  function makeFieldInput(fieldDef, value, onChange) {
+    const input = document.createElement("input");
+    input.className = `field-input ${fieldDef.kind}-input`;
+    input.value = value;
+    if (fieldDef.kind === "number") {
+      input.type = "number";
+      input.min = "0";
+      input.inputMode = "numeric";
+    } else if (fieldDef.kind === "char") {
+      input.type = "text";
+      input.maxLength = 1;
+    } else {
+      input.type = "text";
+      input.placeholder = fieldDef.placeholder || "";
+    }
+    input.addEventListener("input", () => {
+      if (fieldDef.kind === "char") input.value = input.value.slice(0, 1);
+      onChange(input.value);
+    });
+    input.addEventListener("pointerdown", (e) => e.stopPropagation());
+    return input;
+  }
+
+  function makeRemoveButton(onRemove) {
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove-btn";
+    removeBtn.textContent = "×";
+    removeBtn.title = "Remove";
+    removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    removeBtn.addEventListener("click", onRemove);
+    return removeBtn;
+  }
+
+  function buildLeafChip(inst, isToolboxPreview) {
     const def = BLOCKS[inst.defId];
     const chip = document.createElement("div");
     chip.className = isToolboxPreview ? "block" : "wb-chip";
-    if (isToolboxPreview) {
-      chip.dataset.def = inst.defId;
-    } else {
-      chip.dataset.uid = inst.uid;
-    }
+    if (isToolboxPreview) chip.dataset.def = inst.defId;
+    else chip.dataset.uid = inst.uid;
 
     labelParts(def).forEach((part) => {
       if (part.text !== undefined) {
@@ -432,48 +474,140 @@
         }
         chip.appendChild(span);
       } else {
-        const input = document.createElement("input");
-        input.className = `field-input ${fieldDef.kind}-input`;
-        input.value = inst.fields[fieldDef.name];
-        if (fieldDef.kind === "number") {
-          input.type = "number";
-          input.min = "0";
-          input.inputMode = "numeric";
-        } else if (fieldDef.kind === "char") {
-          input.type = "text";
-          input.maxLength = 1;
-        } else {
-          input.type = "text";
-          input.placeholder = fieldDef.placeholder || "";
-        }
-        input.addEventListener("input", () => {
-          if (fieldDef.kind === "char") {
-            input.value = input.value.slice(0, 1);
-          }
-          inst.fields[fieldDef.name] = input.value;
-          recompute();
-        });
-        input.addEventListener("pointerdown", (e) => e.stopPropagation());
-        chip.appendChild(input);
+        chip.appendChild(
+          makeFieldInput(fieldDef, inst.fields[fieldDef.name], (val) => {
+            inst.fields[fieldDef.name] = val;
+            recompute();
+          })
+        );
       }
     });
 
     if (!isToolboxPreview) {
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "remove-btn";
-      removeBtn.textContent = "×";
-      removeBtn.title = "Remove";
-      removeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-      removeBtn.addEventListener("click", () => {
-        workbenchState = workbenchState.filter((x) => x.uid !== inst.uid);
-        renderWorkbench();
-        recompute();
-      });
-      chip.appendChild(removeBtn);
+      chip.appendChild(
+        makeRemoveButton(() => {
+          const loc = findParentArrayAndIndex(workbenchState, inst.uid);
+          if (loc) loc.array.splice(loc.index, 1);
+          renderWorkbench();
+          recompute();
+        })
+      );
     }
 
     return chip;
+  }
+
+  function renderAmountHeader(headerEl, inst) {
+    const isCollapsed = inst.fields.collapsed === "true";
+
+    const collapseBtn = document.createElement("button");
+    collapseBtn.type = "button";
+    collapseBtn.className = "collapse-btn";
+    collapseBtn.textContent = isCollapsed ? "▸" : "▾";
+    collapseBtn.title = isCollapsed ? "Expand" : "Collapse";
+    collapseBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    collapseBtn.addEventListener("click", () => {
+      inst.fields.collapsed = isCollapsed ? "false" : "true";
+      renderWorkbench();
+      recompute();
+    });
+    headerEl.appendChild(collapseBtn);
+
+    if (isCollapsed) {
+      const summary = document.createElement("span");
+      summary.className = "amount-summary";
+      summary.textContent = amountSummary(inst.fields) + " of:";
+      headerEl.appendChild(summary);
+      return;
+    }
+
+    const select = document.createElement("select");
+    select.className = "amount-mode-select";
+    AMOUNT_MODES.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.value;
+      opt.textContent = m.label;
+      if (inst.fields.mode === m.value) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener("pointerdown", (e) => e.stopPropagation());
+    select.addEventListener("change", () => {
+      inst.fields.mode = select.value;
+      renderWorkbench();
+      recompute();
+    });
+    headerEl.appendChild(select);
+
+    const mode = inst.fields.mode;
+    const numberFieldDef = { kind: "number" };
+    if (["exactly", "atLeast", "upTo", "moreThan"].includes(mode)) {
+      headerEl.appendChild(
+        makeFieldInput(numberFieldDef, inst.fields.n, (val) => {
+          inst.fields.n = val;
+          recompute();
+        })
+      );
+    } else if (mode === "between") {
+      headerEl.appendChild(
+        makeFieldInput(numberFieldDef, inst.fields.n, (val) => {
+          inst.fields.n = val;
+          recompute();
+        })
+      );
+      headerEl.appendChild(document.createTextNode("to"));
+      headerEl.appendChild(
+        makeFieldInput(numberFieldDef, inst.fields.m, (val) => {
+          inst.fields.m = val;
+          recompute();
+        })
+      );
+    }
+    headerEl.appendChild(document.createTextNode("of:"));
+  }
+
+  function buildContainerChip(inst) {
+    const def = BLOCKS[inst.defId];
+    const chip = document.createElement("div");
+    chip.className = "wb-chip container-chip";
+    chip.dataset.uid = inst.uid;
+
+    const header = document.createElement("div");
+    header.className = "container-header";
+    if (inst.defId === "amount") {
+      renderAmountHeader(header, inst);
+    } else {
+      header.appendChild(document.createTextNode(def.label));
+    }
+    header.appendChild(
+      makeRemoveButton(() => {
+        const loc = findParentArrayAndIndex(workbenchState, inst.uid);
+        if (loc) loc.array.splice(loc.index, 1);
+        renderWorkbench();
+        recompute();
+      })
+    );
+    chip.appendChild(header);
+
+    const dropzone = document.createElement("div");
+    dropzone.className = "dropzone";
+    dropzone.dataset.owner = String(inst.uid);
+    if (inst.children.length === 0) {
+      const hint = document.createElement("div");
+      hint.className = "dropzone-empty-hint";
+      hint.textContent = "drop here";
+      dropzone.appendChild(hint);
+    } else {
+      inst.children.forEach((child) => dropzone.appendChild(renderNode(child)));
+    }
+    chip.appendChild(dropzone);
+
+    return chip;
+  }
+
+  function renderNode(inst) {
+    const def = BLOCKS[inst.defId];
+    if (def.kind === "container") return buildContainerChip(inst);
+    return buildLeafChip(inst, false);
   }
 
   function renderToolbox() {
@@ -482,7 +616,7 @@
       const groupEl = document.createElement("div");
       groupEl.className = "tool-group";
       defIds.forEach((defId) => {
-        groupEl.appendChild(buildChip({ defId, fields: {} }, true));
+        groupEl.appendChild(buildLeafChip({ defId, fields: {} }, true));
       });
       toolboxEl.appendChild(groupEl);
     });
@@ -497,22 +631,7 @@
       workbenchEl.appendChild(placeholder);
       return;
     }
-
-    const groups = groupInstances(workbenchState);
-    groups.forEach((group, idx) => {
-      if (idx > 0) {
-        const plus = document.createElement("span");
-        plus.className = "plus-sep";
-        plus.textContent = "+";
-        workbenchEl.appendChild(plus);
-      }
-      const groupEl = document.createElement("div");
-      groupEl.className = "chip-group" + (group.complete ? "" : " incomplete");
-      group.items.forEach((inst) => {
-        groupEl.appendChild(buildChip(inst, false));
-      });
-      workbenchEl.appendChild(groupEl);
-    });
+    workbenchState.forEach((inst) => workbenchEl.appendChild(renderNode(inst)));
   }
 
   function recompute() {
@@ -542,9 +661,10 @@
       return;
     }
 
+    const flags = "gm" + (ignoreCaseEl.checked ? "i" : "");
     let re;
     try {
-      re = new RegExp(result.pattern, "gm");
+      re = new RegExp(result.pattern, flags);
     } catch (e) {
       regexOutputEl.classList.add("error");
       regexOutputEl.placeholder = "Invalid regex: " + e.message;
@@ -593,7 +713,9 @@
   }
 
   // ---------------------------------------------------------------------
-  // Drag and drop (Pointer Events: unifies mouse, touch and pen)
+  // Drag and drop (Pointer Events: unifies mouse, touch and pen).
+  // Any block -- toolbox or workbench -- can be dropped into the root
+  // workbench or into any container's nested drop zone.
   // ---------------------------------------------------------------------
 
   const TAP_THRESHOLD_PX = 8;
@@ -608,27 +730,66 @@
   let dragMoved = false;
   let activePointerId = null;
 
-  function computeDropIndex(clientX) {
-    const groups = groupInstances(workbenchState);
-    const flatBoundaries = []; // cumulative count of instances before each group
-    let count = 0;
-    groups.forEach((g) => {
-      flatBoundaries.push(count);
-      count += g.items.length;
-    });
-    flatBoundaries.push(count);
+  function dropzoneChipEls(dropzoneEl) {
+    return Array.from(dropzoneEl.children).filter((el) =>
+      el.classList.contains("wb-chip")
+    );
+  }
 
-    const groupEls = Array.from(workbenchEl.querySelectorAll(".chip-group"));
-    if (groupEls.length === 0) return 0;
+  function computeInsertIndex(dropzoneEl, x, y) {
+    const chipEls = dropzoneChipEls(dropzoneEl);
+    if (chipEls.length === 0) return 0;
+    const rects = chipEls.map((el) => el.getBoundingClientRect());
 
-    for (let i = 0; i < groupEls.length; i++) {
-      const rect = groupEls[i].getBoundingClientRect();
-      const mid = rect.left + rect.width / 2;
-      if (clientX < mid) {
-        return flatBoundaries[i];
+    const rows = [];
+    let currentRow = [0];
+    for (let i = 1; i < rects.length; i++) {
+      const prev = rects[currentRow[currentRow.length - 1]];
+      const cur = rects[i];
+      const overlaps = cur.top < prev.bottom && cur.bottom > prev.top;
+      if (overlaps) currentRow.push(i);
+      else {
+        rows.push(currentRow);
+        currentRow = [i];
       }
     }
-    return flatBoundaries[flatBoundaries.length - 1];
+    rows.push(currentRow);
+
+    let targetRow = rows[0];
+    let bestDist = Infinity;
+    for (const row of rows) {
+      const top = Math.min(...row.map((i) => rects[i].top));
+      const bottom = Math.max(...row.map((i) => rects[i].bottom));
+      if (y >= top && y <= bottom) {
+        targetRow = row;
+        bestDist = -1;
+        break;
+      }
+      const center = (top + bottom) / 2;
+      const d = Math.abs(y - center);
+      if (d < bestDist) {
+        bestDist = d;
+        targetRow = row;
+      }
+    }
+
+    for (const i of targetRow) {
+      const r = rects[i];
+      const midX = r.left + r.width / 2;
+      if (x < midX) return i;
+    }
+    return targetRow[targetRow.length - 1] + 1;
+  }
+
+  function resolveDropzone(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el) return null;
+    return el.closest(".dropzone");
+  }
+
+  function dragGhostLabel(defId) {
+    if (defId === "amount") return "amount";
+    return BLOCKS[defId].label.replace(/\{(\w+)\}/g, "___").replace(/:$/, "");
   }
 
   function startDrag(e, mode, payload) {
@@ -640,23 +801,24 @@
     dragMoved = false;
     activePointerId = e.pointerId;
 
+    let defId;
     if (mode === "new") {
       dragDefId = payload;
+      defId = payload;
     } else {
       dragUid = payload;
-      dragSourceEl = document.querySelector(
-        `.wb-chip[data-uid="${payload}"]`
-      );
-      if (dragSourceEl) dragSourceEl.style.opacity = "0.3";
+      dragSourceEl = document.querySelector(`.wb-chip[data-uid="${payload}"]`);
+      if (dragSourceEl) {
+        dragSourceEl.style.opacity = "0.3";
+        dragSourceEl.style.pointerEvents = "none";
+      }
+      const inst = findInstanceByUid(workbenchState, payload);
+      defId = inst.defId;
     }
 
-    const def =
-      BLOCKS[
-        mode === "new" ? payload : workbenchState.find((x) => x.uid === payload).defId
-      ];
     dragGhost = document.createElement("div");
     dragGhost.className = "drag-ghost block";
-    dragGhost.textContent = def.label.replace(/\{(\w+)\}/g, "___");
+    dragGhost.textContent = dragGhostLabel(defId);
     document.body.appendChild(dragGhost);
     moveGhost(e);
 
@@ -680,67 +842,80 @@
       dragMoved = true;
     }
     moveGhost(e);
-    const rect = workbenchEl.getBoundingClientRect();
-    const overWorkbench =
-      e.clientX >= rect.left &&
-      e.clientX <= rect.right &&
-      e.clientY >= rect.top &&
-      e.clientY <= rect.bottom;
-    workbenchEl.classList.toggle("drag-over", overWorkbench);
+    const dz = resolveDropzone(e.clientX, e.clientY);
+    document
+      .querySelectorAll(".dropzone.drag-over")
+      .forEach((el) => el.classList.remove("drag-over"));
+    if (dz) dz.classList.add("drag-over");
   }
 
-  function onDragEnd(e) {
-    if (e.pointerId !== activePointerId) return;
+  function endDragCleanup() {
     document.removeEventListener("pointermove", onDragMove);
     document.removeEventListener("pointerup", onDragEnd);
     document.removeEventListener("pointercancel", onDragEnd);
-    workbenchEl.classList.remove("drag-over");
+    document
+      .querySelectorAll(".dropzone.drag-over")
+      .forEach((el) => el.classList.remove("drag-over"));
     if (dragGhost) {
       dragGhost.remove();
       dragGhost = null;
     }
-
-    const rect = workbenchEl.getBoundingClientRect();
-    const droppedOverWorkbench =
-      e.clientX >= rect.left &&
-      e.clientX <= rect.right &&
-      e.clientY >= rect.top &&
-      e.clientY <= rect.bottom;
-
-    // A tap (no meaningful movement) on a toolbox block appends it to the
-    // end of the workbench -- much easier to hit precisely on a phone
-    // than dragging a block onto the workbench's exact bounds.
-    const isTap = !dragMoved;
-
-    if (dragMode === "new" && (droppedOverWorkbench || isTap)) {
-      const insertIndex = isTap && !droppedOverWorkbench
-        ? workbenchState.length
-        : computeDropIndex(e.clientX);
-      const inst = makeInstance(dragDefId);
-      workbenchState.splice(insertIndex, 0, inst);
-    } else if (dragMode === "move") {
-      if (droppedOverWorkbench) {
-        const insertIndex = computeDropIndex(e.clientX);
-        const fromIdx = workbenchState.findIndex((x) => x.uid === dragUid);
-        if (fromIdx !== -1) {
-          const [item] = workbenchState.splice(fromIdx, 1);
-          let idx = insertIndex;
-          if (fromIdx < idx) idx--;
-          workbenchState.splice(idx, 0, item);
-        }
-      } else if (dragMoved) {
-        // dragged outside workbench -> remove
-        workbenchState = workbenchState.filter((x) => x.uid !== dragUid);
-      }
+    if (dragSourceEl) {
+      dragSourceEl.style.opacity = "";
+      dragSourceEl.style.pointerEvents = "";
     }
-
-    if (dragSourceEl) dragSourceEl.style.opacity = "";
     dragMode = null;
     dragDefId = null;
     dragUid = null;
     dragSourceEl = null;
     activePointerId = null;
+  }
 
+  function onDragEnd(e) {
+    if (e.pointerId !== activePointerId) return;
+
+    const mode = dragMode;
+    const isTap = !dragMoved;
+    let dz = resolveDropzone(e.clientX, e.clientY);
+
+    if (mode === "new") {
+      // A tap with no movement always appends to the root workbench --
+      // easier to hit than the workbench's exact bounds on a phone.
+      if (isTap && !dz) dz = workbenchEl;
+      if (dz) {
+        const targetArray =
+          dz.dataset.owner === "root"
+            ? workbenchState
+            : findInstanceByUid(workbenchState, parseInt(dz.dataset.owner, 10)).children;
+        const insertIndex = isTap && dz === workbenchEl
+          ? targetArray.length
+          : computeInsertIndex(dz, e.clientX, e.clientY);
+        targetArray.splice(insertIndex, 0, makeInstance(dragDefId));
+      }
+    } else if (mode === "move" && dragMoved) {
+      const loc = findParentArrayAndIndex(workbenchState, dragUid);
+      if (loc && dz) {
+        const draggedInst = loc.array[loc.index];
+        const ownerUid = dz.dataset.owner === "root" ? null : parseInt(dz.dataset.owner, 10);
+        const wouldCycle = ownerUid !== null && subtreeContainsUid(draggedInst, ownerUid);
+        if (!wouldCycle) {
+          const insertIndex = computeInsertIndex(dz, e.clientX, e.clientY);
+          loc.array.splice(loc.index, 1);
+          const targetArray =
+            dz.dataset.owner === "root"
+              ? workbenchState
+              : findInstanceByUid(workbenchState, ownerUid).children;
+          let idx = insertIndex;
+          if (targetArray === loc.array && loc.index < idx) idx -= 1;
+          targetArray.splice(idx, 0, draggedInst);
+        }
+      } else if (loc && !dz) {
+        // dragged out of any drop zone -> remove
+        loc.array.splice(loc.index, 1);
+      }
+    }
+
+    endDragCleanup();
     renderWorkbench();
     recompute();
   }
@@ -755,9 +930,15 @@
     });
   }
 
-  // reorder / remove existing chips
+  // reorder / move / remove existing chips (event delegation covers
+  // chips created inside nested drop zones too)
   workbenchEl.addEventListener("pointerdown", (e) => {
-    if (e.target.tagName === "INPUT" || e.target.classList.contains("remove-btn")) {
+    if (
+      e.target.tagName === "INPUT" ||
+      e.target.tagName === "SELECT" ||
+      e.target.classList.contains("remove-btn") ||
+      e.target.classList.contains("collapse-btn")
+    ) {
       return;
     }
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -773,6 +954,7 @@
   });
 
   textInputEl.addEventListener("input", recompute);
+  ignoreCaseEl.addEventListener("change", recompute);
 
   copyBtn.addEventListener("click", async () => {
     const value = regexOutputEl.value;
