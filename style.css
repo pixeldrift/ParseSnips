@@ -904,8 +904,7 @@ input.field-input.char-input {
 
 /* Container blocks (amount, not, group, either, lookaround) hold a
    nested drop zone below their header, so they stack vertically
-   instead of sitting inline like a plain atom chip. Extra top/side
-   padding leaves clean room for the two corner buttons. */
+   instead of sitting inline like a plain atom chip. */
 
 .wb-chip.container-chip {
   flex-direction: column;
@@ -916,21 +915,24 @@ input.field-input.char-input {
      leaf chips use overflow:hidden to keep their icon end cap's
      corners flush with the pill's own rounding. */
   overflow: visible;
-  padding: 22px 22px 10px;
+  padding: 8px 10px 10px;
   gap: 8px;
   cursor: default;
 }
 
-.wb-chip.container-chip .remove-btn {
-  top: 4px;
-  right: 4px;
-  transform: none;
+/* Collapse toggle, header (icon + label, or a group's editable name),
+   and remove button all share this one row -- previously the two
+   buttons floated as corner-pinned overlays above the header's own
+   line, which left it free to wrap onto a second line of its own
+   (fatal for a group's name field, which needs the room). */
+.container-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .collapse-toggle-btn {
-  position: absolute;
-  top: 4px;
-  left: 4px;
+  flex: 0 0 auto;
   width: 17px;
   height: 17px;
   border-radius: 50%;
@@ -953,13 +955,23 @@ input.field-input.char-input {
 .container-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
   cursor: grab;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .container-header:active {
   cursor: grabbing;
+}
+
+/* Back into normal flow as this row's last flex item, instead of the
+   corner-pinned overlay a leaf chip's remove button (the base
+   .wb-chip .remove-btn rule) uses. */
+.wb-chip.container-chip .remove-btn {
+  position: static;
+  transform: none;
+  flex: 0 0 auto;
 }
 
 .container-chip .dropzone {
@@ -992,27 +1004,28 @@ input.field-input.char-input {
   flex: 0 0 auto;
 }
 
+/* Flat, clickable text until focused -- same treatment as a Saved
+   Pattern's own name field (see .bookmark-name-input), and flex:1 so
+   it fills the row between the folder icon and the remove button
+   instead of sizing to a fixed placeholder-driven width. */
 .group-name-input {
-  border: 1px solid #bbb;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 3px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 700;
   color: #333;
-  padding: 1px 6px;
-  min-width: 4em;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1px 4px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .group-name-input:focus {
   background: #fff;
-  border-color: #888;
+  border-color: #999;
   outline: none;
-}
-
-.group-name-input::placeholder {
-  color: #aaa;
-  font-style: italic;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 /* A separate row below the drop zone (not part of the header sentence
@@ -1095,20 +1108,13 @@ input.field-input.char-input {
     line-height: 20px;
   }
 
-  .wb-chip.container-chip .remove-btn {
-    top: 5px;
-    right: 5px;
-  }
-
   .collapse-toggle-btn {
-    top: 5px;
-    left: 5px;
     width: 24px;
     height: 24px;
   }
 
   .wb-chip.container-chip {
-    padding: 30px 24px 12px;
+    padding: 10px 12px 12px;
   }
 
   .amount-mode-select {

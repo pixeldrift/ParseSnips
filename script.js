@@ -487,6 +487,12 @@
 
   let uidCounter = 0;
   let workbenchState = [];
+  let groupNameCounter = 0;
+
+  function nextDefaultGroupName() {
+    groupNameCounter += 1;
+    return `Group ${String(groupNameCounter).padStart(2, "0")}`;
+  }
 
   function makeInstance(defId) {
     const def = BLOCKS[defId];
@@ -1081,35 +1087,25 @@
   const FOLDER_ICON_SVG =
     '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>';
-  const BOOKMARK_ICON_SVG =
-    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<path d="M6 3h12v18l-6-4-6 4V3z"/></svg>';
 
   function renderGroupHeader(headerEl, inst) {
-    const hasName = !!(inst.fields.name && inst.fields.name.trim());
-
     const icon = document.createElement("span");
     icon.className = "group-icon";
-    icon.innerHTML = hasName ? BOOKMARK_ICON_SVG : FOLDER_ICON_SVG;
+    icon.innerHTML = FOLDER_ICON_SVG;
     headerEl.appendChild(icon);
 
-    headerEl.appendChild(document.createTextNode("group:"));
-
+    // Styled and behaves like a Saved Pattern's name (see
+    // .group-name-input/.bookmark-name-input in style.css): flat,
+    // clickable text until focused, no placeholder -- a fresh group
+    // always already has a real (if generic) name, same as a fresh
+    // bookmark.
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.className = "group-name-input";
-    nameInput.placeholder = "name";
     nameInput.value = inst.fields.name || "";
     nameInput.addEventListener("pointerdown", (e) => e.stopPropagation());
     nameInput.addEventListener("input", () => {
       inst.fields.name = nameInput.value;
-    });
-    nameInput.addEventListener("blur", () => {
-      // Re-render only now (not on every keystroke) so the folder/
-      // bookmark icon reflects the current name without disrupting
-      // an in-progress edit.
-      renderWorkbench();
-      recompute();
     });
     headerEl.appendChild(nameInput);
   }
@@ -1292,7 +1288,14 @@
 
     const isCollapsed = inst.fields.collapsed === "true";
 
-    chip.appendChild(
+    // Collapse toggle, header (icon + label/name), and remove button
+    // all share one top row now instead of the header sitting on its
+    // own line below two corner-pinned buttons -- a group's name in
+    // particular needs the room to sit inline rather than wrapping.
+    const topRow = document.createElement("div");
+    topRow.className = "container-top-row";
+
+    topRow.appendChild(
       makeCollapseToggle(isCollapsed, () => {
         inst.fields.collapsed = isCollapsed ? "false" : "true";
         renderWorkbench();
@@ -1311,9 +1314,9 @@
       if (icon) header.appendChild(icon);
       header.appendChild(document.createTextNode(def.label));
     }
-    chip.appendChild(header);
+    topRow.appendChild(header);
 
-    chip.appendChild(
+    topRow.appendChild(
       makeRemoveButton(() => {
         const loc = findParentArrayAndIndex(workbenchState, inst.uid);
         if (loc) loc.array.splice(loc.index, 1);
@@ -1321,6 +1324,8 @@
         recompute();
       })
     );
+
+    chip.appendChild(topRow);
 
     if (!isCollapsed) {
       const dropzone = document.createElement("div");
@@ -1714,6 +1719,19 @@
   let dragStartY = 0;
   let dragMoved = false;
   let activePointerId = null;
+  // Set right after a brand-new "group:" block is created from the
+  // toolbox, so the just-rendered name field can be focused/selected
+  // once (a hint that it's editable, and quick to overtype) -- cleared
+  // immediately after.
+  let pendingGroupFocusUid = null;
+
+  function focusGroupName(uid) {
+    const input = workbenchEl.querySelector(`.wb-chip[data-uid="${uid}"] .group-name-input`);
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
 
   function dropzoneChipEls(dropzoneEl) {
     return Array.from(dropzoneEl.children).filter((el) =>
@@ -1981,7 +1999,12 @@
           ? targetArray.length
           : computeInsertIndex(dz, e.clientX, e.clientY);
         if (mode === "new") {
-          targetArray.splice(insertIndex, 0, makeInstance(dragDefId));
+          const inst = makeInstance(dragDefId);
+          if (dragDefId === "group") {
+            inst.fields.name = nextDefaultGroupName();
+            pendingGroupFocusUid = inst.uid;
+          }
+          targetArray.splice(insertIndex, 0, inst);
         } else {
           const bm = bookmarks.find((b) => b.id === dragBookmarkId);
           if (bm) targetArray.splice(insertIndex, 0, cloneTree(bm.tree));
@@ -2017,6 +2040,10 @@
     endDragCleanup();
     renderWorkbench();
     recompute();
+    if (pendingGroupFocusUid !== null) {
+      focusGroupName(pendingGroupFocusUid);
+      pendingGroupFocusUid = null;
+    }
   }
 
   function attachToolboxHandlers() {
