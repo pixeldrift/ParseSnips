@@ -773,46 +773,6 @@ input.field-input.char-input {
   text-decoration: none;
 }
 
-.workbench-zoom-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.zoom-btn {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #bbb;
-  background: #fff;
-  border-radius: 4px;
-  padding: 0;
-  font-size: 13px;
-  line-height: 1;
-  color: #666;
-  cursor: pointer;
-}
-
-.zoom-btn:hover:not(:disabled) {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.zoom-btn:disabled {
-  color: #ccc;
-  cursor: default;
-}
-
-.zoom-level {
-  font-size: 11px;
-  color: #888;
-  min-width: 30px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
 .workbench {
   min-height: 180px;
   border: 1px solid #bbb;
@@ -824,35 +784,12 @@ input.field-input.char-input {
   box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.22);
   padding: 20px;
   position: relative;
-  /* .workbench-zoom below is deliberately laid out wider than this box
-     at any zoom under 100% (see its own comment) -- its own transform
-     shrinks the *rendering* back down to fit, but the pre-transform
-     layout width it briefly reserves would otherwise register as real
-     horizontal overflow here. This hides the scrollbar; the script.js
-     scroll listener on #workbench covers the rest (see its comment --
-     "hidden" alone still leaves the axis touch/programmatically
-     scrollable). */
-  overflow-x: hidden;
 }
 
 .workbench-placeholder {
   color: #aaa;
   font-style: italic;
   font-family: "Courier New", Courier, monospace;
-}
-
-/* Wraps the actual dropzone content so it can be scaled down without
-   touching #workbench's own border/background/padding. Widening this
-   by the inverse of the scale first means the flex-wrap layout inside
-   still has "full room" to lay chips out at their normal size (more
-   fitting per row), and the transform then shrinks that whole layout
-   back down to fit #workbench's real width -- a genuine zoom rather
-   than just shrinking each chip's own font/padding in place. */
-.workbench-zoom {
-  --wb-scale: 1;
-  width: calc(100% / var(--wb-scale));
-  transform: scale(var(--wb-scale));
-  transform-origin: top left;
 }
 
 /* A drop zone is either the root workbench itself, or the nested slot
@@ -864,6 +801,26 @@ input.field-input.char-input {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+/* Not enough width on a phone screen for the desktop's wrapping grid
+   of chips (2-3 per row at most). Every drop zone -- root and nested
+   alike, since they all share this one class -- becomes a plain
+   vertical list instead: chips stay their natural (content) width
+   rather than stretching edge to edge, and simply stack top to
+   bottom, Scratch/Blockly-style, so the workspace just scrolls like a
+   list no matter how long the pattern gets. Placed after the base
+   rule above (not just inside a later media query) so it actually
+   wins the cascade -- a mobile override at equal specificity loses to
+   a later unconditional rule otherwise, regardless of source order
+   "feeling" like the media query should win. */
+@media (max-width: 860px) {
+  .dropzone {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 6px;
+  }
 }
 
 .dropzone.drag-over {
@@ -883,6 +840,14 @@ input.field-input.char-input {
 .wb-chip {
   display: inline-flex;
   align-items: stretch;
+  /* A dropzone in list mode (see the mobile .dropzone rule) is a
+     column flex container with far more items than it has room for,
+     which by default would flex-shrink every chip down toward
+     unreadable min-content height to try to make them all fit rather
+     than actually scrolling. Chips are never meant to compress -- pin
+     them to their natural size and let the dropzone's own overflow
+     handle the rest. */
+  flex-shrink: 0;
   background: linear-gradient(#fbfbfb, #e4e4e4);
   border: 1px solid #aaa;
   border-radius: 18px;
