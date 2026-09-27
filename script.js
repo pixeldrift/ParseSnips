@@ -383,32 +383,6 @@
       compute: () => "",
     },
 
-    matchGroup: {
-      // References another named "group:" block already on the workbench
-      // by substituting a copy of its compiled pattern at this spot --
-      // not a real regex backreference (those need a capturing group,
-      // which isn't wired up to anything yet), just reuse without
-      // having to duplicate the blocks by hand.
-      kind: "atom",
-      category: "logic",
-      label: "match group:",
-      icon: "#",
-      fields: [],
-      compute: (f) => {
-        const uid = parseInt(f.refUid, 10);
-        if (!uid) return "";
-        if (matchGroupResolutionStack.includes(uid)) return ""; // cycle guard
-        const target = findInstanceByUid(workbenchState, uid);
-        if (!target || target.defId !== "group") return "";
-        matchGroupResolutionStack.push(uid);
-        try {
-          return computeNode(target);
-        } finally {
-          matchGroupResolutionStack.pop();
-        }
-      },
-    },
-
     // -- containers: each holds a nested drop zone -----------------------
     group: {
       kind: "container",
@@ -490,7 +464,7 @@
   // Single source of truth for the toolbox layout. The DOM is generated
   // from BLOCKS, so labels only ever live in one place.
   const TOOLBOX_GROUPS = [
-    ["literal", "anyOf", "anything", "not", "or", "group", "matchGroup"],
+    ["literal", "anyOf", "anything", "not", "or", "group"],
     ["uppercase", "lowercase", "caseInsensitive"],
     ["amount"],
     [
@@ -513,7 +487,6 @@
 
   let uidCounter = 0;
   let workbenchState = [];
-  let matchGroupResolutionStack = []; // cycle guard for "match group:" lookups
 
   function makeInstance(defId) {
     const def = BLOCKS[defId];
@@ -527,9 +500,6 @@
         fields = { collapsed: "false" };
       }
       return { uid: ++uidCounter, defId, fields, children: [] };
-    }
-    if (defId === "matchGroup") {
-      return { uid: ++uidCounter, defId, fields: { refUid: "", expanded: "false" } };
     }
     if (defId === "captureRef") {
       return { uid: ++uidCounter, defId, fields: { refUid: "" } };
@@ -722,7 +692,6 @@
   }
 
   function computeRegex(list) {
-    matchGroupResolutionStack = [];
     captureIndexMap = {};
 
     // Pass 1: find which nodes actually survive into non-empty fragments,
@@ -1386,69 +1355,6 @@
     return results;
   }
 
-  function buildMatchGroupChip(inst) {
-    const chip = document.createElement("div");
-    chip.className = "wb-chip cat-logic";
-    chip.dataset.uid = inst.uid;
-
-    const icon = makeBlockIcon("matchGroup");
-    if (icon) chip.appendChild(icon);
-
-    const body = document.createElement("span");
-    body.className = "chip-body";
-    chip.appendChild(body);
-
-    body.appendChild(document.createTextNode("match group:"));
-
-    const select = document.createElement("select");
-    select.className = "amount-mode-select";
-    const placeholderOpt = document.createElement("option");
-    placeholderOpt.value = "";
-    placeholderOpt.textContent = "— choose —";
-    select.appendChild(placeholderOpt);
-    listNamedGroups(workbenchState).forEach((g) => {
-      const opt = document.createElement("option");
-      opt.value = String(g.uid);
-      opt.textContent = g.fields.name;
-      if (inst.fields.refUid === String(g.uid)) opt.selected = true;
-      select.appendChild(opt);
-    });
-    select.addEventListener("pointerdown", (e) => e.stopPropagation());
-    select.addEventListener("change", () => {
-      inst.fields.refUid = select.value;
-      recompute();
-    });
-    body.appendChild(select);
-
-    const isExpanded = inst.fields.expanded === "true";
-    const toggle = makeCollapseToggle(!isExpanded, () => {
-      inst.fields.expanded = isExpanded ? "false" : "true";
-      renderWorkbench();
-    });
-    toggle.classList.add("inline-expand-toggle");
-    body.appendChild(toggle);
-
-    chip.appendChild(
-      makeRemoveButton(() => {
-        const loc = findParentArrayAndIndex(workbenchState, inst.uid);
-        if (loc) loc.array.splice(loc.index, 1);
-        renderWorkbench();
-        recompute();
-      })
-    );
-
-    if (isExpanded) {
-      chip.classList.add("match-group-expanded");
-      const preview = document.createElement("div");
-      preview.className = "match-group-preview";
-      const target = findInstanceByUid(workbenchState, parseInt(inst.fields.refUid, 10));
-      preview.textContent = target ? computeNode(target) || "(empty)" : "(no group selected)";
-      chip.appendChild(preview);
-    }
-
-    return chip;
-  }
-
   function buildCaptureRefChip(inst) {
     const chip = document.createElement("div");
     chip.className = "wb-chip cat-action";
@@ -1497,7 +1403,6 @@
 
   function renderNode(inst) {
     const def = BLOCKS[inst.defId];
-    if (inst.defId === "matchGroup") return buildMatchGroupChip(inst);
     if (inst.defId === "captureRef") return buildCaptureRefChip(inst);
     if (def.kind === "container" || inst.defId === "replaceWith") return buildContainerChip(inst);
     return buildLeafChip(inst, false);
