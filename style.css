@@ -141,6 +141,14 @@ body {
   .page {
     display: flex;
     flex-direction: column;
+    /* The desktop rule above sets align-items:flex-start (so the two
+       columns don't stretch to match each other's height); left alone
+       on mobile, that also makes every panel shrink-to-fit its own
+       content's preferred width instead of filling the screen, which
+       either narrows a panel with little content (a plain textarea's
+       intrinsic width) or lets one with a long unbreakable line (a
+       bookmark's pattern caption) overflow past the screen edge. */
+    align-items: stretch;
     height: 100vh;
     height: 100dvh;
     padding: 12px;
@@ -306,12 +314,13 @@ body {
     gap: 6px;
   }
 
-  /* All four tab panels (About/Toolbox/Saved/Output) share one
+  /* All five tab panels (About/Toolbox/Saved/Input/Output) share one
      order/slot -- only the active one is actually displayed, so
      whichever it is fills the remaining height. */
   .panel-about,
   .panel-toolbox,
   .panel-saved,
+  .panel-input,
   .panel-output {
     order: 4;
     display: none;
@@ -321,11 +330,31 @@ body {
   .panel-about.mobile-tab-active,
   .panel-toolbox.mobile-tab-active,
   .panel-saved.mobile-tab-active,
+  .panel-input.mobile-tab-active,
   .panel-output.mobile-tab-active {
     display: block;
     flex: 1 1 auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Input's own tab now has nothing else competing for room, so the
+     textarea can simply fill it (still scrolling its own overflow like
+     any textarea, rather than needing the tab pane itself to scroll). */
+  .panel-input.mobile-tab-active {
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+  }
+
+  .panel-input #textInput {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* A <textarea> flex item defaults to min-width:auto (its intrinsic
+       content width, from its cols="20" default), which can win over
+       stretching to fill the container's width -- reset it so the
+       explicit width:100% on .text-box actually applies. */
+    min-width: 0;
   }
 
   /* Mirrors .field-icon-btn-reload's fix-up on the regex field: a
@@ -370,14 +399,6 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-  }
-
-  /* Text to Process doesn't need as many visible lines as its desktop
-     min-height gives it -- it already scrolls its own overflow like any
-     textarea -- so trim it back to leave more of the tab's limited
-     height for the output box, the one that actually needs the room. */
-  .panel-output #textInput {
-    min-height: 90px;
   }
 
   .panel-output #outputBox {

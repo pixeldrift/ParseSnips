@@ -74,15 +74,18 @@
       <button type="button" class="mobile-tab-btn active" data-tab="toolbox" role="tab" aria-selected="true">Toolbox</button>
       <button type="button" class="mobile-tab-btn" data-tab="saved" role="tab" aria-selected="false">Saved</button>
       <button type="button" class="mobile-tab-btn" data-tab="about" role="tab" aria-selected="false">About</button>
+      <button type="button" class="mobile-tab-btn" data-tab="input" role="tab" aria-selected="false">Input</button>
       <button type="button" class="mobile-tab-btn" data-tab="output" role="tab" aria-selected="false">Output</button>
     </nav>
 
-    <section class="panel panel-output" id="outputPanel" data-mobile-tab="output">
+    <section class="panel panel-input" id="inputPanel" data-mobile-tab="input">
       <div class="section-header-row">
         <h2 class="section-title">Text to Process:</h2>
       </div>
       <textarea id="textInput" class="text-box" placeholder="Paste your text here.">Please contact our support team at support@example.com or sales@example.org if you have questions. You can also reach us by phone at (555) 123-4567, Monday through Friday. Your order placed on 03/15/2024 has shipped to 500 Market Street, Springfield, IL 62704, and you can track it any time at https://www.example.com/track. For reference, here is a snippet of the confirmation page: &lt;p class="note"&gt;Thanks for shopping with us!&lt;/p&gt;</textarea>
+    </section>
 
+    <section class="panel panel-output" id="outputPanel" data-mobile-tab="output">
       <div class="section-header-row">
         <h2 class="section-title">Output text:</h2>
         <button id="outputCopyBtn" class="clear-btn" type="button">Copy</button>
