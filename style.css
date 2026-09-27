@@ -4,9 +4,18 @@
 
 body {
   margin: 0;
-  font-family: "Noto Serif", Georgia, "Times New Roman", serif;
+  font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
   color: #222;
   background: #eeeae3;
+}
+
+/* Block/chip labels (Toolbox previews, Workbench chips, Saved Patterns
+   entries) stay sans-serif -- the slab serif above is for headings,
+   tabs and prose, not the compact building blocks themselves. */
+.block,
+.wb-chip,
+.bookmark-chip {
+  font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
 .page {
@@ -311,7 +320,9 @@ body {
     order: 3;
     display: flex;
     flex: 0 0 auto;
-    gap: 6px;
+    align-items: flex-end;
+    gap: 4px;
+    border-bottom: 1px solid #bbb;
   }
 
   /* All five tab panels (About/Toolbox/Saved/Input/Output) share one
@@ -1178,47 +1189,64 @@ textarea.text-box::placeholder {
   }
 }
 
+/* Slim radio group, not big toggle buttons -- a real (small) radio dot
+   plus a plain text label, no pill/bubble background. The checked
+   option is distinguished by weight/color alone, the same convention
+   used elsewhere in the app (e.g. the greedy/lazy toggle labels). */
 .output-mode-switch {
   display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+  flex-wrap: nowrap;
 }
 
-.output-mode-btn {
-  border: 1px solid #bbb;
-  background: #f5f5f5;
-  border-radius: 14px;
-  padding: 4px 12px;
+.output-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
-  color: #666;
+  color: #777;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.output-mode-btn:hover {
-  background: #ececec;
+.output-mode-option input[type="radio"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: #3b6fa8;
+  cursor: pointer;
+  flex: 0 0 auto;
 }
 
-.output-mode-btn.active {
-  background: #3b6fa8;
-  border-color: #2f5a8a;
-  color: #fff;
+.output-mode-option:has(input:checked) {
+  color: #222;
   font-weight: 600;
 }
 
-/* The phone-only tab bar switching between Toolbox / Saved / Output --
-   see .mobile-tab-bar and the .panel-* rules in the max-width:860px
-   media query above for how the tab content itself is shown/hidden. */
+/* The phone-only tab bar switching between Toolbox / Saved / Input /
+   Output / About -- see .mobile-tab-bar and the .panel-* rules in the
+   max-width:860px media query above for how the tab content itself is
+   shown/hidden. Styled to actually read as folder tabs: flat across
+   the bottom, rounded only on top, sitting flush on the divider line
+   below them (see .mobile-tab-bar's border-bottom). */
 .mobile-tab-btn {
   flex: 1 1 0;
   border: 1px solid #bbb;
+  border-bottom: none;
   background: #f5f5f5;
-  border-radius: 8px;
-  padding: 8px 6px;
-  font-size: 13px;
+  border-radius: 6px 6px 0 0;
+  padding: 5px 4px;
+  font-size: 12px;
   font-weight: 600;
   color: #666;
   cursor: pointer;
+  position: relative;
+  /* Sits on top of the divider line below, covering the segment of it
+     directly under this tab so the tab's own bottom edge reads as the
+     line rather than a gap between the two. */
+  bottom: -1px;
 }
 
 .mobile-tab-btn.active {
@@ -1229,15 +1257,8 @@ textarea.text-box::placeholder {
 
 @media (pointer: coarse) {
   .mobile-tab-btn {
-    padding: 10px 6px;
-    font-size: 14px;
-  }
-}
-
-@media (pointer: coarse) {
-  .output-mode-btn {
+    padding: 7px 4px;
     font-size: 13px;
-    padding: 6px 13px;
   }
 }
 

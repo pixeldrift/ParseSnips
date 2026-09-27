@@ -6,7 +6,7 @@
 <title>ParseSnips - Visual Regex</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -59,7 +59,7 @@
         <div class="regex-field-wrap">
           <input id="regexOutput" class="regex-field" type="text" placeholder="Regex code" spellcheck="false" />
           <button id="reloadBtn" class="field-icon-btn field-icon-btn-reload" type="button" title="Parse this text back into blocks">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="12.5" y="2.5" width="5" height="8" rx="1" transform="rotate(45 15 6.5)"></rect><path d="M17.5 9L9 17.5a2 2 0 1 1-3-3L14.5 6"></path><path d="M3 21l4-4"></path></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="12.5" y="1.5" width="6" height="9" rx="1.5" transform="rotate(45 15.5 6)"></rect><path d="m10.5 10.5-7 7a1.5 1.5 0 0 0 2.1 2.1l7-7"></path></svg>
           </button>
           <button id="copyBtn" class="field-icon-btn" type="button" title="Copy to clipboard">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
@@ -73,9 +73,9 @@
     <nav class="mobile-tab-bar" id="mobileTabBar" role="tablist" aria-label="Panels">
       <button type="button" class="mobile-tab-btn active" data-tab="toolbox" role="tab" aria-selected="true">Toolbox</button>
       <button type="button" class="mobile-tab-btn" data-tab="saved" role="tab" aria-selected="false">Saved</button>
-      <button type="button" class="mobile-tab-btn" data-tab="about" role="tab" aria-selected="false">About</button>
       <button type="button" class="mobile-tab-btn" data-tab="input" role="tab" aria-selected="false">Input</button>
       <button type="button" class="mobile-tab-btn" data-tab="output" role="tab" aria-selected="false">Output</button>
+      <button type="button" class="mobile-tab-btn" data-tab="about" role="tab" aria-selected="false">About</button>
     </nav>
 
     <section class="panel panel-input" id="inputPanel" data-mobile-tab="input">
@@ -90,16 +90,25 @@
         <h2 class="section-title">Output text:</h2>
         <button id="outputCopyBtn" class="clear-btn" type="button">Copy</button>
       </div>
-      <div id="outputModeSwitch" class="output-mode-switch" role="group" aria-label="Output display mode">
-        <button type="button" class="output-mode-btn active" data-mode="highlight">Highlight matches</button>
-        <button type="button" class="output-mode-btn" data-mode="onlyMatches">Only matches</button>
-        <button type="button" class="output-mode-btn" data-mode="removed">Matches removed</button>
-      </div>
       <div class="output-box-wrap">
         <div id="outputBox" class="text-box output-box" data-placeholder="See your results here."></div>
         <button id="outputCopyIconBtn" class="field-icon-btn field-icon-btn-corner" type="button" title="Copy to clipboard">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
+      </div>
+      <div id="outputModeSwitch" class="output-mode-switch" role="radiogroup" aria-label="Output display mode">
+        <label class="output-mode-option">
+          <input type="radio" name="outputMode" value="highlight" checked />
+          <span>Highlight</span>
+        </label>
+        <label class="output-mode-option">
+          <input type="radio" name="outputMode" value="onlyMatches" />
+          <span>Only matches</span>
+        </label>
+        <label class="output-mode-option">
+          <input type="radio" name="outputMode" value="removed" />
+          <span>Matches removed</span>
+        </label>
       </div>
     </section>
   </main>

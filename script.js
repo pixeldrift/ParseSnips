@@ -2148,14 +2148,10 @@
 
   textInputEl.addEventListener("input", recompute);
 
-  outputModeSwitchEl.querySelectorAll(".output-mode-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      outputMode = btn.dataset.mode;
-      outputModeSwitchEl
-        .querySelectorAll(".output-mode-btn")
-        .forEach((b) => b.classList.toggle("active", b === btn));
-      recompute();
-    });
+  outputModeSwitchEl.addEventListener("change", (e) => {
+    if (e.target.name !== "outputMode") return;
+    outputMode = e.target.value;
+    recompute();
   });
 
   // Phone-only tab bar (Toolbox / Saved / Output share one screen slot
