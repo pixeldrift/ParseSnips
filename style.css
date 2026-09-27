@@ -156,22 +156,22 @@ body {
   .logo {
     order: 0;
     flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 20px;
     margin: 0;
   }
 
   .tagline {
-    display: block;
+    display: inline;
     font-size: 9px;
     font-style: italic;
     font-weight: 400;
     color: #999;
-    line-height: 1.3;
-    margin-top: 1px;
-    /* max-width is set from JS to the actual rendered width of the
-       "ParseSnips" text itself (script.js' syncTaglineWidth) -- as a
-       flex item .logo stretches to the full page width by default, so
-       a plain CSS max-width here has nothing meaningful to cap against. */
+    flex: 1 1 auto;
+    min-width: 90px;
   }
 
   /* Everything condensed: no more "About:"/"Workbench:"/"Regex string:"/
