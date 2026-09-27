@@ -45,6 +45,15 @@ body {
   display: none;
 }
 
+/* Same story as .field-icon-btn-reload above -- desktop keeps the
+   separate "Copy" text button next to "Output text:"; this icon-style
+   twin only appears on mobile, once that heading (and the text button
+   beside it) are hidden. Declared here, ahead of the media query, for
+   the same cascade-order reason. */
+.field-icon-btn-corner {
+  display: none;
+}
+
 @media (max-width: 860px) {
   /* On a phone there's no room to lay the Toolbox/Saved Patterns out
      beside the Workbench, and dragging uses Pointer Events rather than
@@ -84,16 +93,22 @@ body {
 
   /* Everything condensed: no more "About:"/"Workbench:"/"Regex string:"/
      etc. subtitles -- the tab bar and placeholder text already say what
-     each area is for. The rows that paired a heading with real controls
-     (Workbench's Save/Clear, Output's Copy) still need their remaining
-     button(s) pushed to the end now that the heading beside them is gone. */
+     each area is for. Output's "Copy" text button still needs its
+     remaining button pushed to the end now that the heading beside it
+     is gone (Workbench's Save/Clear move into the workspace itself
+     instead -- see .workbench-header below). */
   .section-title {
     display: none;
   }
 
-  .workbench-header,
   .section-header-row {
     justify-content: flex-end;
+  }
+
+  /* Replaced by the icon button inside the output box itself (see
+     #outputCopyIconBtn below). */
+  #outputCopyBtn {
+    display: none;
   }
 
   .panel-about .about {
@@ -111,12 +126,40 @@ body {
     flex-direction: column;
     gap: 6px;
     min-height: 0;
+    position: relative;
+  }
+
+  /* Save/Clear move off their own row above the box and float inside
+     the Workbench's own top-right corner instead, so no space is spent
+     on them between the title and the box at all. Taking them out of
+     flow like this also means the panel's own "gap" no longer reserves
+     space for that row, so #workbench starts right at the top. */
+  .panel-workbench .workbench-header {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 6px;
+    padding: 2px 6px;
+    /* This floating row now overlaps the Workbench's own drop zone, so
+       only the buttons themselves should intercept taps/drags -- any
+       padding around them must stay click-through, or a chip dragged
+       toward that corner (a completely ordinary "move to the end"
+       gesture) would land on the header instead of the drop zone
+       beneath it and get treated as "dropped outside" (removed). */
+    pointer-events: none;
+  }
+
+  .panel-workbench .workbench-header-actions {
+    pointer-events: auto;
   }
 
   .panel-workbench #workbench {
     flex: 1 1 auto;
     overflow-y: auto;
     min-height: 90px;
+    padding-top: 34px;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
   }
@@ -160,13 +203,9 @@ body {
     gap: 6px;
   }
 
-  /* panel-about rides along with panel-output (data-mobile-tab="output"
-     on both) rather than getting a tab of its own -- it just renders
-     above the Text to Process/Output content within that same pane, in
-     DOM order. All four panels share one order/slot -- only the active
-     one(s) are actually displayed. panel-about stays auto-height (with
-     its own small scroll as a safety net) so panel-output, the one that
-     actually needs the room, gets the rest. */
+  /* All four tab panels (About/Toolbox/Saved/Output) share one
+     order/slot -- only the active one is actually displayed, so
+     whichever it is fills the remaining height. */
   .panel-about,
   .panel-toolbox,
   .panel-saved,
@@ -181,20 +220,34 @@ body {
   .panel-saved.mobile-tab-active,
   .panel-output.mobile-tab-active {
     display: block;
-  }
-
-  .panel-toolbox.mobile-tab-active,
-  .panel-saved.mobile-tab-active,
-  .panel-output.mobile-tab-active {
     flex: 1 1 auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
 
-  .panel-about.mobile-tab-active {
-    flex: 0 0 auto;
-    max-height: 26vh;
-    overflow-y: auto;
+  /* Mirrors .field-icon-btn-reload's fix-up on the regex field: a
+     fixed top-right corner instead of the shared .field-icon-btn's
+     vertical-center position (which only makes sense on a single-line
+     input, not a tall output box), plus a permanent light backdrop so
+     it stays legible over arbitrary output text rather than only on
+     hover. */
+  .output-box-wrap {
+    position: relative;
+  }
+
+  .field-icon-btn-corner {
+    display: flex;
+  }
+
+  #outputCopyIconBtn {
+    top: 8px;
+    right: 8px;
+    transform: none;
+    background: rgba(255, 255, 255, 0.75);
+  }
+
+  #outputCopyIconBtn:hover {
+    background: rgba(255, 255, 255, 0.95);
   }
 }
 

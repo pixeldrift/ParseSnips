@@ -27,7 +27,7 @@
   </aside>
 
   <main class="main">
-    <section class="panel panel-about" data-mobile-tab="output">
+    <section class="panel panel-about" data-mobile-tab="about">
       <h2 class="section-title">About:</h2>
       <p class="about">
         <strong>ParseSnips</strong> is a visually intuitive, natural language approach to generating regular expressions. No coding or
@@ -67,6 +67,7 @@
     <nav class="mobile-tab-bar" id="mobileTabBar" role="tablist" aria-label="Panels">
       <button type="button" class="mobile-tab-btn active" data-tab="toolbox" role="tab" aria-selected="true">Toolbox</button>
       <button type="button" class="mobile-tab-btn" data-tab="saved" role="tab" aria-selected="false">Saved</button>
+      <button type="button" class="mobile-tab-btn" data-tab="about" role="tab" aria-selected="false">About</button>
       <button type="button" class="mobile-tab-btn" data-tab="output" role="tab" aria-selected="false">Output</button>
     </nav>
 
@@ -85,7 +86,12 @@
         <button type="button" class="output-mode-btn" data-mode="onlyMatches">Only matches</button>
         <button type="button" class="output-mode-btn" data-mode="removed">Matches removed</button>
       </div>
-      <div id="outputBox" class="text-box output-box" data-placeholder="See your results here."></div>
+      <div class="output-box-wrap">
+        <div id="outputBox" class="text-box output-box" data-placeholder="See your results here."></div>
+        <button id="outputCopyIconBtn" class="field-icon-btn field-icon-btn-corner" type="button" title="Copy to clipboard">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+      </div>
     </section>
   </main>
 

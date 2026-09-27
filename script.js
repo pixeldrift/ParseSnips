@@ -1026,6 +1026,7 @@
   const outputBoxEl = document.getElementById("outputBox");
   const copyBtn = document.getElementById("copyBtn");
   const outputCopyBtn = document.getElementById("outputCopyBtn");
+  const outputCopyIconBtn = document.getElementById("outputCopyIconBtn");
   const rebuildBtn = document.getElementById("rebuildBtn");
   const reloadBtn = document.getElementById("reloadBtn");
   const regexParseErrorEl = document.getElementById("regexParseError");
@@ -1845,7 +1846,22 @@
   function resolveDropzone(x, y) {
     const el = document.elementFromPoint(x, y);
     if (!el) return null;
-    return el.closest(".dropzone");
+    const dz = el.closest(".dropzone");
+    if (dz) return dz;
+    // Something with no dropzone of its own can still be drawn on top of
+    // one -- on the phone layout, the Workbench's Save/Clear buttons
+    // float directly over its own top-right corner (see .workbench-header
+    // in style.css), which is exactly where an ordinary "move this chip
+    // to the end" drag naturally lands. Falling through to "no dropzone
+    // here" in that case would silently delete whatever was being
+    // dragged (see onDragEnd's "dropped outside -> remove" branch), so
+    // treat a point that's still geometrically inside the root Workbench
+    // as a drop onto it regardless of what's drawn on top at that pixel.
+    const wbRect = workbenchEl.getBoundingClientRect();
+    if (x >= wbRect.left && x <= wbRect.right && y >= wbRect.top && y <= wbRect.bottom) {
+      return workbenchEl;
+    }
+    return null;
   }
 
   function resolveBookmarksBox(x, y) {
@@ -2193,6 +2209,9 @@
   copyBtn.addEventListener("click", () => copyToClipboard(regexOutputEl.value, copyBtn));
   outputCopyBtn.addEventListener("click", () =>
     copyToClipboard(outputBoxEl.textContent, outputCopyBtn)
+  );
+  outputCopyIconBtn.addEventListener("click", () =>
+    copyToClipboard(outputBoxEl.textContent, outputCopyIconBtn)
   );
 
   // -- reverse parsing: rebuild the block tree from edited regex text ----
