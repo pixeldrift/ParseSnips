@@ -598,20 +598,20 @@ body {
 
 .bookmark-name-input {
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.5);
+  background: transparent;
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
   color: #333;
   padding: 1px 4px;
   border-radius: 3px;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .bookmark-name-input:focus {
   background: #fff;
   border-color: #999;
   outline: none;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .bookmark-pattern-caption {
@@ -1367,7 +1367,7 @@ textarea.text-box::placeholder {
 }
 
 .cat-bookmark {
-  background: linear-gradient(#fffcf0, #f7ecc4);
+  background: linear-gradient(#eef1f8, #cfd8ea);
 }
 
 /* The "lift off, shrink, fly to the bookmarks box" animation: a
