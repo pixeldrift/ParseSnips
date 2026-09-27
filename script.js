@@ -422,7 +422,7 @@
       kind: "container",
       category: "logic",
       label: "not:",
-      icon: "¬",
+      icon: "!",
       childJoin: "concat",
       wrap: (inner) => negateBase(inner),
     },
@@ -1161,12 +1161,20 @@
     if (isToolboxPreview) chip.dataset.def = inst.defId;
     else chip.dataset.uid = inst.uid;
 
+    // The icon is a direct child of the chip (not the body wrapper) so
+    // it can stretch to the chip's full height and sit flush against
+    // its left edge, like a rounded end cap, instead of floating as a
+    // small inline badge -- see .block-icon/.chip-body in style.css.
     const icon = makeBlockIcon(inst.defId);
     if (icon) chip.appendChild(icon);
 
+    const body = document.createElement("span");
+    body.className = "chip-body";
+    chip.appendChild(body);
+
     labelParts(def).forEach((part) => {
       if (part.text !== undefined) {
-        chip.appendChild(document.createTextNode(part.text));
+        body.appendChild(document.createTextNode(part.text));
         return;
       }
       const fieldDef = def.fields.find((f) => f.name === part.field);
@@ -1178,9 +1186,9 @@
         } else {
           span.dataset.default = String(fieldDef.default);
         }
-        chip.appendChild(span);
+        body.appendChild(span);
       } else {
-        chip.appendChild(
+        body.appendChild(
           makeFieldInput(fieldDef, inst.fields[fieldDef.name], (val) => {
             inst.fields[fieldDef.name] = val;
             recompute();
@@ -1385,7 +1393,12 @@
 
     const icon = makeBlockIcon("matchGroup");
     if (icon) chip.appendChild(icon);
-    chip.appendChild(document.createTextNode("match group:"));
+
+    const body = document.createElement("span");
+    body.className = "chip-body";
+    chip.appendChild(body);
+
+    body.appendChild(document.createTextNode("match group:"));
 
     const select = document.createElement("select");
     select.className = "amount-mode-select";
@@ -1405,7 +1418,7 @@
       inst.fields.refUid = select.value;
       recompute();
     });
-    chip.appendChild(select);
+    body.appendChild(select);
 
     const isExpanded = inst.fields.expanded === "true";
     const toggle = makeCollapseToggle(!isExpanded, () => {
@@ -1413,7 +1426,7 @@
       renderWorkbench();
     });
     toggle.classList.add("inline-expand-toggle");
-    chip.appendChild(toggle);
+    body.appendChild(toggle);
 
     chip.appendChild(
       makeRemoveButton(() => {
@@ -1443,7 +1456,12 @@
 
     const icon = makeBlockIcon("captureRef");
     if (icon) chip.appendChild(icon);
-    chip.appendChild(document.createTextNode("capture group:"));
+
+    const body = document.createElement("span");
+    body.className = "chip-body";
+    chip.appendChild(body);
+
+    body.appendChild(document.createTextNode("capture group:"));
 
     const select = document.createElement("select");
     select.className = "amount-mode-select";
@@ -1463,7 +1481,7 @@
       inst.fields.refUid = select.value;
       recompute();
     });
-    chip.appendChild(select);
+    body.appendChild(select);
 
     chip.appendChild(
       makeRemoveButton(() => {

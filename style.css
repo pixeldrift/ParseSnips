@@ -96,11 +96,16 @@ body {
   display: none;
 }
 
-/* Desktop keeps "☆ Save Pattern"/"Clear" as text; the icon-only twins
-   inside these buttons (see .btn-icon in the HTML) only show up on
-   mobile, where .btn-text is hidden instead. */
+/* Same bookmark/X icon in front of the text on desktop as the
+   icon-only version mobile shows (there .btn-text is hidden instead --
+   see the max-width:860px rules below). */
 .btn-icon {
-  display: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* .clear-btn's underline is meant for its text, not drawn under the
+     icon glyph too. */
+  text-decoration: none;
 }
 
 /* Desktop has no room constraint next to "ParseSnips"; this byline
@@ -322,7 +327,21 @@ body {
     flex: 0 0 auto;
     align-items: flex-end;
     gap: 4px;
-    border-bottom: 1px solid #bbb;
+    position: relative;
+  }
+
+  /* A full-viewport-width divider, not just as wide as the tab row
+     itself -- breaks out of .page's own 12px padding on each side
+     (the amount is hardcoded to match it) since that's the only inset
+     between this row and the actual screen edge on the phone layout. */
+  .mobile-tab-bar::after {
+    content: "";
+    position: absolute;
+    left: -12px;
+    right: -12px;
+    bottom: 0;
+    height: 2px;
+    background: #bbb;
   }
 
   /* All five tab panels (About/Toolbox/Saved/Input/Output) share one
@@ -448,6 +467,15 @@ body {
   gap: 8px;
 }
 
+/* .block-icon is used in two very different places, so its actual
+   look is entirely selector-scoped below rather than set here:
+    - a direct child of .block/.wb-chip (a leaf chip's own icon) is a
+      full-height rounded end cap flush with the pill's left edge
+    - inside .container-header (a container chip's header sentence,
+      e.g. "group:", "amount:") it stays the small inline badge it's
+      always been -- that header is a normal flex row, not a pill
+      whose edge the icon should extend to.
+   Shared basics only here; each context adds its own sizing/shape. */
 .block-icon {
   display: flex;
   height: 100%;
@@ -455,6 +483,20 @@ body {
   justify-content: center;
   font-family: "Courier New", Courier, monospace;
   font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.block > .block-icon,
+.wb-chip > .block-icon {
+  font-size: 11px;
+  color: #555;
+  background: rgba(255, 255, 255, 0.45);
+  border-right: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 18px 0 0 18px;
+  padding: 0 8px;
+}
+
+.container-header .block-icon {
   font-size: 11px;
   color: #666;
   background: rgba(255, 255, 255, 0.55);
@@ -472,14 +514,20 @@ body {
   }
 }
 
-.block {
+.chip-body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 14px 6px 8px;
+}
+
+.block {
+  display: inline-flex;
+  align-items: stretch;
   background: linear-gradient(#fbfbfb, #e4e4e4);
   border: 1px solid #aaa;
   border-radius: 18px;
-  padding: 6px 14px;
+  overflow: hidden;
   font-size: 13px;
   cursor: grab;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -498,8 +546,11 @@ body {
 }
 
 @media (pointer: coarse) {
+  .chip-body {
+    padding: 9px 16px 9px 10px;
+  }
+
   .block {
-    padding: 9px 16px;
     font-size: 14px;
   }
 }
@@ -701,6 +752,9 @@ input.field-input.char-input {
 }
 
 .clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: none;
   border: none;
   color: #888;
@@ -765,12 +819,11 @@ input.field-input.char-input {
 
 .wb-chip {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
   background: linear-gradient(#fbfbfb, #e4e4e4);
   border: 1px solid #aaa;
   border-radius: 18px;
-  padding: 5px 24px 5px 12px;
+  overflow: hidden;
   font-size: 13px;
   position: relative;
   cursor: grab;
@@ -782,6 +835,12 @@ input.field-input.char-input {
 
 .wb-chip:active {
   cursor: grabbing;
+}
+
+/* Extra right-side room so the label/fields never run under the
+   corner-pinned remove button (see .wb-chip .remove-btn below). */
+.wb-chip .chip-body {
+  padding: 5px 24px 5px 8px;
 }
 
 /* Tucked just inside the block's own edge rather than straddling it.
@@ -824,6 +883,11 @@ input.field-input.char-input {
   flex-direction: column;
   align-items: stretch;
   border-radius: 12px;
+  /* Unlike a plain leaf chip, this one holds real nested content
+     (a dropzone, corner buttons) that must never be clipped -- only
+     leaf chips use overflow:hidden to keep their icon end cap's
+     corners flush with the pill's own rounding. */
+  overflow: visible;
   padding: 22px 22px 10px;
   gap: 8px;
   cursor: default;
@@ -1012,8 +1076,11 @@ input.field-input.char-input {
 }
 
 @media (pointer: coarse) {
+  .wb-chip .chip-body {
+    padding: 8px 26px 8px 10px;
+  }
+
   .wb-chip {
-    padding: 8px 14px;
     font-size: 14px;
   }
 
@@ -1240,15 +1307,11 @@ textarea.text-box::placeholder {
   background: #f5f5f5;
   border-radius: 6px 6px 0 0;
   padding: 5px 4px;
+  font-family: "Roboto Slab", Georgia, "Times New Roman", serif;
   font-size: 12px;
   font-weight: 600;
   color: #666;
   cursor: pointer;
-  position: relative;
-  /* Sits on top of the divider line below, covering the segment of it
-     directly under this tab so the tab's own bottom edge reads as the
-     line rather than a gap between the two. */
-  bottom: -1px;
 }
 
 .mobile-tab-btn.active {
