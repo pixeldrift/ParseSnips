@@ -770,6 +770,46 @@ input.field-input.char-input {
   text-decoration: none;
 }
 
+.workbench-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.zoom-btn {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #bbb;
+  background: #fff;
+  border-radius: 4px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  color: #666;
+  cursor: pointer;
+}
+
+.zoom-btn:hover:not(:disabled) {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.zoom-btn:disabled {
+  color: #ccc;
+  cursor: default;
+}
+
+.zoom-level {
+  font-size: 11px;
+  color: #888;
+  min-width: 30px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .workbench {
   min-height: 180px;
   border: 1px solid #bbb;
@@ -781,12 +821,35 @@ input.field-input.char-input {
   box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.22);
   padding: 20px;
   position: relative;
+  /* .workbench-zoom below is deliberately laid out wider than this box
+     at any zoom under 100% (see its own comment) -- its own transform
+     shrinks the *rendering* back down to fit, but the pre-transform
+     layout width it briefly reserves would otherwise register as real
+     horizontal overflow here. This hides the scrollbar; the script.js
+     scroll listener on #workbench covers the rest (see its comment --
+     "hidden" alone still leaves the axis touch/programmatically
+     scrollable). */
+  overflow-x: hidden;
 }
 
 .workbench-placeholder {
   color: #aaa;
   font-style: italic;
   font-family: "Courier New", Courier, monospace;
+}
+
+/* Wraps the actual dropzone content so it can be scaled down without
+   touching #workbench's own border/background/padding. Widening this
+   by the inverse of the scale first means the flex-wrap layout inside
+   still has "full room" to lay chips out at their normal size (more
+   fitting per row), and the transform then shrinks that whole layout
+   back down to fit #workbench's real width -- a genuine zoom rather
+   than just shrinking each chip's own font/padding in place. */
+.workbench-zoom {
+  --wb-scale: 1;
+  width: calc(100% / var(--wb-scale));
+  transform: scale(var(--wb-scale));
+  transform-origin: top left;
 }
 
 /* A drop zone is either the root workbench itself, or the nested slot
