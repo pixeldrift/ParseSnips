@@ -383,32 +383,6 @@
       compute: () => "",
     },
 
-    matchGroup: {
-      // References another named "group:" block already on the workbench
-      // by substituting a copy of its compiled pattern at this spot --
-      // not a real regex backreference (those need a capturing group,
-      // which isn't wired up to anything yet), just reuse without
-      // having to duplicate the blocks by hand.
-      kind: "atom",
-      category: "logic",
-      label: "match group:",
-      icon: "#",
-      fields: [],
-      compute: (f) => {
-        const uid = parseInt(f.refUid, 10);
-        if (!uid) return "";
-        if (matchGroupResolutionStack.includes(uid)) return ""; // cycle guard
-        const target = findInstanceByUid(workbenchState, uid);
-        if (!target || target.defId !== "group") return "";
-        matchGroupResolutionStack.push(uid);
-        try {
-          return computeNode(target);
-        } finally {
-          matchGroupResolutionStack.pop();
-        }
-      },
-    },
-
     // -- containers: each holds a nested drop zone -----------------------
     group: {
       kind: "container",
@@ -490,7 +464,7 @@
   // Single source of truth for the toolbox layout. The DOM is generated
   // from BLOCKS, so labels only ever live in one place.
   const TOOLBOX_GROUPS = [
-    ["literal", "anyOf", "anything", "not", "or", "group", "matchGroup"],
+    ["literal", "anyOf", "anything", "not", "or", "group"],
     ["uppercase", "lowercase", "caseInsensitive"],
     ["amount"],
     [
@@ -513,7 +487,6 @@
 
   let uidCounter = 0;
   let workbenchState = [];
-  let matchGroupResolutionStack = []; // cycle guard for "match group:" lookups
 
   function makeInstance(defId) {
     const def = BLOCKS[defId];
@@ -527,9 +500,6 @@
         fields = { collapsed: "false" };
       }
       return { uid: ++uidCounter, defId, fields, children: [] };
-    }
-    if (defId === "matchGroup") {
-      return { uid: ++uidCounter, defId, fields: { refUid: "", expanded: "false" } };
     }
     if (defId === "captureRef") {
       return { uid: ++uidCounter, defId, fields: { refUid: "" } };
@@ -722,7 +692,6 @@
   }
 
   function computeRegex(list) {
-    matchGroupResolutionStack = [];
     captureIndexMap = {};
 
     // Pass 1: find which nodes actually survive into non-empty fragments,
@@ -1021,6 +990,7 @@
 
   const toolboxEl = document.getElementById("toolbox");
   const workbenchEl = document.getElementById("workbench");
+  const workbenchZoomEl = document.getElementById("workbenchZoom");
   const regexOutputEl = document.getElementById("regexOutput");
   const textInputEl = document.getElementById("textInput");
   const outputBoxEl = document.getElementById("outputBox");
@@ -1034,11 +1004,25 @@
   const bookmarksBoxEl = document.getElementById("bookmarksBox");
   const bookmarkBtn = document.getElementById("bookmarkBtn");
   const outputModeSwitchEl = document.getElementById("outputModeSwitch");
+  const zoomOutBtn = document.getElementById("zoomOutBtn");
+  const zoomInBtn = document.getElementById("zoomInBtn");
+  const zoomLevelLabel = document.getElementById("zoomLevelLabel");
 
   let outputMode = "highlight"; // 'highlight' | 'onlyMatches' | 'removed'
 
-  workbenchEl.classList.add("dropzone");
-  workbenchEl.dataset.owner = "root";
+  // #workbenchZoom is laid out wider than #workbench under 100% zoom
+  // (see .workbench-zoom in style.css), which leaves #workbench
+  // technically horizontally scrollable even with overflow-x set to
+  // hidden (unlike overflow-y, "hidden" doesn't block a touch-driven or
+  // programmatic scrollLeft change, only the scrollbar). Snap it back
+  // immediately so a stray horizontal swipe can't pan the box sideways
+  // and reveal blank space past the (purely visual) scaled-down content.
+  workbenchEl.addEventListener("scroll", () => {
+    if (workbenchEl.scrollLeft !== 0) workbenchEl.scrollLeft = 0;
+  });
+
+  workbenchZoomEl.classList.add("dropzone");
+  workbenchZoomEl.dataset.owner = "root";
 
   function labelParts(def) {
     const parts = [];
@@ -1386,69 +1370,6 @@
     return results;
   }
 
-  function buildMatchGroupChip(inst) {
-    const chip = document.createElement("div");
-    chip.className = "wb-chip cat-logic";
-    chip.dataset.uid = inst.uid;
-
-    const icon = makeBlockIcon("matchGroup");
-    if (icon) chip.appendChild(icon);
-
-    const body = document.createElement("span");
-    body.className = "chip-body";
-    chip.appendChild(body);
-
-    body.appendChild(document.createTextNode("match group:"));
-
-    const select = document.createElement("select");
-    select.className = "amount-mode-select";
-    const placeholderOpt = document.createElement("option");
-    placeholderOpt.value = "";
-    placeholderOpt.textContent = "— choose —";
-    select.appendChild(placeholderOpt);
-    listNamedGroups(workbenchState).forEach((g) => {
-      const opt = document.createElement("option");
-      opt.value = String(g.uid);
-      opt.textContent = g.fields.name;
-      if (inst.fields.refUid === String(g.uid)) opt.selected = true;
-      select.appendChild(opt);
-    });
-    select.addEventListener("pointerdown", (e) => e.stopPropagation());
-    select.addEventListener("change", () => {
-      inst.fields.refUid = select.value;
-      recompute();
-    });
-    body.appendChild(select);
-
-    const isExpanded = inst.fields.expanded === "true";
-    const toggle = makeCollapseToggle(!isExpanded, () => {
-      inst.fields.expanded = isExpanded ? "false" : "true";
-      renderWorkbench();
-    });
-    toggle.classList.add("inline-expand-toggle");
-    body.appendChild(toggle);
-
-    chip.appendChild(
-      makeRemoveButton(() => {
-        const loc = findParentArrayAndIndex(workbenchState, inst.uid);
-        if (loc) loc.array.splice(loc.index, 1);
-        renderWorkbench();
-        recompute();
-      })
-    );
-
-    if (isExpanded) {
-      chip.classList.add("match-group-expanded");
-      const preview = document.createElement("div");
-      preview.className = "match-group-preview";
-      const target = findInstanceByUid(workbenchState, parseInt(inst.fields.refUid, 10));
-      preview.textContent = target ? computeNode(target) || "(empty)" : "(no group selected)";
-      chip.appendChild(preview);
-    }
-
-    return chip;
-  }
-
   function buildCaptureRefChip(inst) {
     const chip = document.createElement("div");
     chip.className = "wb-chip cat-action";
@@ -1497,7 +1418,6 @@
 
   function renderNode(inst) {
     const def = BLOCKS[inst.defId];
-    if (inst.defId === "matchGroup") return buildMatchGroupChip(inst);
     if (inst.defId === "captureRef") return buildCaptureRefChip(inst);
     if (def.kind === "container" || inst.defId === "replaceWith") return buildContainerChip(inst);
     return buildLeafChip(inst, false);
@@ -1516,16 +1436,16 @@
   }
 
   function renderWorkbench() {
-    workbenchEl.innerHTML = "";
+    workbenchZoomEl.innerHTML = "";
     bookmarkBtn.disabled = workbenchState.length === 0;
     if (workbenchState.length === 0) {
       const placeholder = document.createElement("div");
       placeholder.className = "workbench-placeholder";
       placeholder.textContent = "Drag or tap blocks to build your pattern";
-      workbenchEl.appendChild(placeholder);
+      workbenchZoomEl.appendChild(placeholder);
       return;
     }
-    workbenchState.forEach((inst) => workbenchEl.appendChild(renderNode(inst)));
+    workbenchState.forEach((inst) => workbenchZoomEl.appendChild(renderNode(inst)));
   }
 
   // ---------------------------------------------------------------------
@@ -1877,7 +1797,7 @@
     // as a drop onto it regardless of what's drawn on top at that pixel.
     const wbRect = workbenchEl.getBoundingClientRect();
     if (x >= wbRect.left && x <= wbRect.right && y >= wbRect.top && y <= wbRect.bottom) {
-      return workbenchEl;
+      return workbenchZoomEl;
     }
     return null;
   }
@@ -2066,13 +1986,13 @@
     if (mode === "new" || mode === "bookmark") {
       // A tap with no movement always appends to the root workbench --
       // easier to hit than the workbench's exact bounds on a phone.
-      if (isTap && !dz) dz = workbenchEl;
+      if (isTap && !dz) dz = workbenchZoomEl;
       if (dz) {
         const targetArray =
           dz.dataset.owner === "root"
             ? workbenchState
             : findInstanceByUid(workbenchState, parseInt(dz.dataset.owner, 10)).children;
-        const insertIndex = isTap && dz === workbenchEl
+        const insertIndex = isTap && dz === workbenchZoomEl
           ? targetArray.length
           : computeInsertIndex(dz, e.clientX, e.clientY);
         if (mode === "new") {
@@ -2163,6 +2083,37 @@
     renderWorkbench();
     recompute();
   });
+
+  // Zooms the workbench's pattern out (shrinks chips and lets more of
+  // them fit per row before wrapping) so a long pattern still fits the
+  // visible area on a phone-size screen instead of forcing constant
+  // scrolling. workbenchZoomEl is widened by the inverse of the scale
+  // first (see .workbench-zoom in style.css) so wrapping is computed as
+  // if there were more room, then the whole thing is scaled back down
+  // to actually take up less space.
+  const ZOOM_MIN = 0.4;
+  const ZOOM_MAX = 1;
+  const ZOOM_STEP = 0.1;
+  let workbenchZoom = 1;
+
+  function applyWorkbenchZoom() {
+    workbenchZoomEl.style.setProperty("--wb-scale", workbenchZoom);
+    zoomLevelLabel.textContent = Math.round(workbenchZoom * 100) + "%";
+    zoomOutBtn.disabled = workbenchZoom <= ZOOM_MIN + 1e-9;
+    zoomInBtn.disabled = workbenchZoom >= ZOOM_MAX - 1e-9;
+  }
+
+  zoomOutBtn.addEventListener("click", () => {
+    workbenchZoom = Math.max(ZOOM_MIN, +(workbenchZoom - ZOOM_STEP).toFixed(2));
+    applyWorkbenchZoom();
+  });
+
+  zoomInBtn.addEventListener("click", () => {
+    workbenchZoom = Math.min(ZOOM_MAX, +(workbenchZoom + ZOOM_STEP).toFixed(2));
+    applyWorkbenchZoom();
+  });
+
+  applyWorkbenchZoom();
 
   textInputEl.addEventListener("input", recompute);
 
