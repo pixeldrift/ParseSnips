@@ -13,7 +13,7 @@
 <div class="page">
 
   <aside class="sidebar">
-    <h1 class="logo">ParseSnips</h1>
+    <h1 class="logo">ParseSnips<span class="tagline">a visual regular expression builder</span></h1>
 
     <section class="panel panel-toolbox mobile-tab-active" id="toolboxPanel" data-mobile-tab="toolbox">
       <h2 class="section-title">Toolbox:</h2>
@@ -40,8 +40,14 @@
       <div class="workbench-header">
         <h2 class="section-title">Workbench:</h2>
         <div class="workbench-header-actions">
-          <button id="bookmarkBtn" class="clear-btn" type="button" title="Save the current pattern to Saved Patterns">&#9734; Save Pattern</button>
-          <button id="clearWorkbench" class="clear-btn" type="button">Clear</button>
+          <button id="bookmarkBtn" class="clear-btn" type="button" title="Save the current pattern to Saved Patterns">
+            <span class="btn-text">&#9734; Save Pattern</span>
+            <span class="btn-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"></path></svg></span>
+          </button>
+          <button id="clearWorkbench" class="clear-btn" type="button" title="Clear">
+            <span class="btn-text">Clear</span>
+            <span class="btn-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></span>
+          </button>
         </div>
       </div>
       <div id="workbench" class="workbench">
@@ -53,7 +59,7 @@
         <div class="regex-field-wrap">
           <input id="regexOutput" class="regex-field" type="text" placeholder="Regex code" spellcheck="false" />
           <button id="reloadBtn" class="field-icon-btn field-icon-btn-reload" type="button" title="Parse this text back into blocks">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="12.5" y="2.5" width="5" height="8" rx="1" transform="rotate(45 15 6.5)"></rect><path d="M17.5 9L9 17.5a2 2 0 1 1-3-3L14.5 6"></path><path d="M3 21l4-4"></path></svg>
           </button>
           <button id="copyBtn" class="field-icon-btn" type="button" title="Copy to clipboard">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>

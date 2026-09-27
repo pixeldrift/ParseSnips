@@ -35,12 +35,45 @@ body {
   display: none;
 }
 
+/* Copy icon tucked inside the field's own right edge, like a search
+   box's magnifying glass, rather than a separate button beside it.
+   Declared here (before the .field-icon-btn-reload/-corner "hidden by
+   default" rules below, and well before the max-width:860px media
+   query) specifically so those modifier rules -- both narrower
+   selectors meant to override this shared class's display on some of
+   its buttons -- reliably come after the general rule they override,
+   instead of an unrelated later cascade position deciding it for them. */
+.field-icon-btn {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  color: #888;
+  cursor: pointer;
+}
+
+.field-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
+
+.field-icon-btn.copied {
+  color: #2a8a3e;
+  font-size: 15px;
+  font-weight: bold;
+}
+
 /* Desktop keeps the separate "Rebuild blocks" button (see .copy-btn);
    this icon only appears once that button is hidden on mobile, in the
-   max-width:860px rules below, where it sits just left of the copy icon.
-   Declared here (before that media query) rather than beside the other
-   .field-icon-btn rules further down, so it reliably loses the cascade
-   tie to the mobile override regardless of specificity. */
+   max-width:860px rules below, where it sits just left of the copy icon. */
 .field-icon-btn-reload {
   display: none;
 }
@@ -52,6 +85,42 @@ body {
    the same cascade-order reason. */
 .field-icon-btn-corner {
   display: none;
+}
+
+/* Desktop keeps "☆ Save Pattern"/"Clear" as text; the icon-only twins
+   inside these buttons (see .btn-icon in the HTML) only show up on
+   mobile, where .btn-text is hidden instead. */
+.btn-icon {
+  display: none;
+}
+
+/* Desktop has no room constraint next to "ParseSnips"; this byline
+   only appears on mobile, sized and capped to the logo's own width
+   there (see .logo/.tagline in the max-width:860px rules below). */
+.tagline {
+  display: none;
+}
+
+/* Declared here, ahead of the media query, for the same cascade-order
+   reason as the rules above -- this used to sit after the media query
+   (with the rest of the base, unconditional rules) where its unrelated
+   desktop sizing silently beat every mobile-only override of the same
+   properties (font-size, margin) regardless of which one "looks" more
+   specific to the viewport. */
+.logo {
+  font-weight: 700;
+  font-size: 34px;
+  margin: 0 0 20px;
+}
+
+/* Same cascade-order reason -- moved here (was after the media query,
+   with the rest of the base rules) so the mobile-only
+   justify-content:flex-end override below reliably wins. */
+.workbench-header,
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 @media (max-width: 860px) {
@@ -91,6 +160,20 @@ body {
     margin: 0;
   }
 
+  .tagline {
+    display: block;
+    font-size: 9px;
+    font-style: italic;
+    font-weight: 400;
+    color: #999;
+    line-height: 1.3;
+    margin-top: 1px;
+    /* max-width is set from JS to the actual rendered width of the
+       "ParseSnips" text itself (script.js' syncTaglineWidth) -- as a
+       flex item .logo stretches to the full page width by default, so
+       a plain CSS max-width here has nothing meaningful to cap against. */
+  }
+
   /* Everything condensed: no more "About:"/"Workbench:"/"Regex string:"/
      etc. subtitles -- the tab bar and placeholder text already say what
      each area is for. Output's "Copy" text button still needs its
@@ -127,6 +210,26 @@ body {
     gap: 6px;
     min-height: 0;
     position: relative;
+    /* Cancels most of .page's own gap above this panel, so the box
+       sits right under the title/tagline instead of leaving a visible
+       band of empty space there. */
+    margin-top: -6px;
+  }
+
+  /* Icon-only on mobile instead of "☆ Save Pattern"/"Clear" text (see
+     .btn-text/.btn-icon, hidden/shown here vs. the base rules above). */
+  .btn-text {
+    display: none;
+  }
+
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .workbench-header-actions {
+    gap: 8px;
   }
 
   /* Save/Clear move off their own row above the box and float inside
@@ -249,12 +352,40 @@ body {
   #outputCopyIconBtn:hover {
     background: rgba(255, 255, 255, 0.95);
   }
-}
 
-.logo {
-  font-weight: 700;
-  font-size: 34px;
-  margin: 0 0 20px;
+  /* Text to Process and the mode-switch buttons stay their natural
+     size; only the output box itself grows to fill whatever's left
+     and scrolls its own overflowing content -- rather than the whole
+     Output tab growing tall and needing the OUTER tab pane to scroll
+     (which could push the box itself off screen). */
+  .panel-output.mobile-tab-active {
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+  }
+
+  .panel-output .output-box-wrap {
+    flex: 1 1 auto;
+    min-height: 90px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Text to Process doesn't need as many visible lines as its desktop
+     min-height gives it -- it already scrolls its own overflow like any
+     textarea -- so trim it back to leave more of the tab's limited
+     height for the output box, the one that actually needs the room. */
+  .panel-output #textInput {
+    min-height: 90px;
+  }
+
+  .panel-output #outputBox {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .section-title {
@@ -528,13 +659,6 @@ input.field-input.char-input {
 }
 
 /* Workbench */
-
-.workbench-header,
-.section-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
 
 .workbench-header-actions {
   display: flex;
@@ -952,36 +1076,6 @@ input.field-input.char-input {
 
 .regex-field::placeholder {
   color: #999;
-}
-
-/* Copy icon tucked inside the field's own right edge, like a search
-   box's magnifying glass, rather than a separate button beside it. */
-.field-icon-btn {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  border-radius: 5px;
-  color: #888;
-  cursor: pointer;
-}
-
-.field-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #333;
-}
-
-.field-icon-btn.copied {
-  color: #2a8a3e;
-  font-size: 15px;
-  font-weight: bold;
 }
 
 @media (pointer: coarse) {

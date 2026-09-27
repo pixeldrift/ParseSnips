@@ -2251,6 +2251,32 @@
     regexParseErrorEl.textContent = "";
   });
 
+  // The tagline under the logo (mobile only -- see .tagline in style.css)
+  // must never read as wider than "ParseSnips" itself. As a flex item
+  // .logo stretches to the full page width by default, so there's no
+  // plain CSS way to cap the tagline to just the title text's own
+  // rendered width -- measure it directly instead. Re-measured once the
+  // real webfont finishes loading, since the fallback font swapped in
+  // at first paint can have different metrics.
+  function syncTaglineWidth() {
+    const logoEl = document.querySelector(".logo");
+    const taglineEl = document.querySelector(".tagline");
+    if (!logoEl || !taglineEl) return;
+    const textNode = Array.from(logoEl.childNodes).find(
+      (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== ""
+    );
+    if (!textNode) return;
+    const range = document.createRange();
+    range.selectNode(textNode);
+    const width = range.getBoundingClientRect().width;
+    if (width > 0) taglineEl.style.maxWidth = width + "px";
+  }
+  syncTaglineWidth();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(syncTaglineWidth);
+  }
+  window.addEventListener("resize", syncTaglineWidth);
+
   renderToolbox();
   attachToolboxHandlers();
   renderBookmarks();
