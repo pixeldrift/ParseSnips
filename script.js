@@ -1027,6 +1027,7 @@
   const copyBtn = document.getElementById("copyBtn");
   const outputCopyBtn = document.getElementById("outputCopyBtn");
   const rebuildBtn = document.getElementById("rebuildBtn");
+  const reloadBtn = document.getElementById("reloadBtn");
   const regexParseErrorEl = document.getElementById("regexParseError");
   const clearBtn = document.getElementById("clearWorkbench");
   const bookmarksBoxEl = document.getElementById("bookmarksBox");
@@ -2147,11 +2148,6 @@
   // wide screen, where every panel is already visible at once, so this
   // wiring is harmless there too and needs no screen-size check itself.
   const mobileTabBarEl = document.getElementById("mobileTabBar");
-  const mobileTabPanels = {
-    toolbox: document.getElementById("toolboxPanel"),
-    saved: document.getElementById("savedPanel"),
-    output: document.getElementById("outputPanel"),
-  };
   mobileTabBarEl.querySelectorAll(".mobile-tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tab = btn.dataset.tab;
@@ -2162,8 +2158,11 @@
           b.classList.toggle("active", isActive);
           b.setAttribute("aria-selected", isActive ? "true" : "false");
         });
-      Object.keys(mobileTabPanels).forEach((key) => {
-        mobileTabPanels[key].classList.toggle("mobile-tab-active", key === tab);
+      // More than one panel can share a tab slot (e.g. panel-about rides
+      // along with panel-output), so toggle every matching element, not
+      // just one fixed panel per tab.
+      document.querySelectorAll("[data-mobile-tab]").forEach((panel) => {
+        panel.classList.toggle("mobile-tab-active", panel.dataset.mobileTab === tab);
       });
     });
   });
@@ -2214,6 +2213,7 @@
   }
 
   rebuildBtn.addEventListener("click", rebuildFromRegexText);
+  reloadBtn.addEventListener("click", rebuildFromRegexText);
   regexOutputEl.addEventListener("blur", () => {
     // Only re-parse if the text actually diverged from the last
     // generated pattern -- otherwise every click-away would needlessly

@@ -35,6 +35,16 @@ body {
   display: none;
 }
 
+/* Desktop keeps the separate "Rebuild blocks" button (see .copy-btn);
+   this icon only appears once that button is hidden on mobile, in the
+   max-width:860px rules below, where it sits just left of the copy icon.
+   Declared here (before that media query) rather than beside the other
+   .field-icon-btn rules further down, so it reliably loses the cascade
+   tie to the mobile override regardless of specificity. */
+.field-icon-btn-reload {
+  display: none;
+}
+
 @media (max-width: 860px) {
   /* On a phone there's no room to lay the Toolbox/Saved Patterns out
      beside the Workbench, and dragging uses Pointer Events rather than
@@ -72,17 +82,18 @@ body {
     margin: 0;
   }
 
-  .panel-about {
-    order: 1;
-    flex: 0 0 auto;
-    max-height: 68px;
-    overflow-y: auto;
+  /* Everything condensed: no more "About:"/"Workbench:"/"Regex string:"/
+     etc. subtitles -- the tab bar and placeholder text already say what
+     each area is for. The rows that paired a heading with real controls
+     (Workbench's Save/Clear, Output's Copy) still need their remaining
+     button(s) pushed to the end now that the heading beside them is gone. */
+  .section-title {
+    display: none;
   }
 
-  .panel-about .section-title,
-  .panel-workbench .section-title {
-    margin-top: 0;
-    margin-bottom: 4px;
+  .workbench-header,
+  .section-header-row {
+    justify-content: flex-end;
   }
 
   .panel-about .about {
@@ -106,6 +117,40 @@ body {
     flex: 1 1 auto;
     overflow-y: auto;
     min-height: 90px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  /* The regex box reads as the bottom edge of the same workspace, not a
+     separate floating field below it: pull it flush against the
+     Workbench (cancelling the panel's own gap) and square off the
+     seam between them. */
+  .panel-workbench .regex-row {
+    margin-top: -6px;
+  }
+
+  .panel-workbench .regex-field {
+    border-top: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    padding-right: 64px;
+  }
+
+  /* The "Rebuild blocks" button is replaced by this icon inside the
+     field itself, sitting just left of the copy icon. */
+  #rebuildBtn {
+    display: none;
+  }
+
+  .field-icon-btn-reload {
+    display: flex;
+  }
+
+  /* An ID selector, not just the shared .field-icon-btn class, so this
+     offset reliably beats the later, unconditional .field-icon-btn{right:6px}
+     base rule regardless of the two rules' order in the file. */
+  #reloadBtn {
+    right: 34px;
   }
 
   .mobile-tab-bar {
@@ -115,27 +160,41 @@ body {
     gap: 6px;
   }
 
-  /* All three tab panels share one order/slot -- only the active one is
-     actually displayed, so whichever it is fills the remaining height. */
+  /* panel-about rides along with panel-output (data-mobile-tab="output"
+     on both) rather than getting a tab of its own -- it just renders
+     above the Text to Process/Output content within that same pane, in
+     DOM order. All four panels share one order/slot -- only the active
+     one(s) are actually displayed. panel-about stays auto-height (with
+     its own small scroll as a safety net) so panel-output, the one that
+     actually needs the room, gets the rest. */
+  .panel-about,
   .panel-toolbox,
   .panel-saved,
   .panel-output {
     order: 4;
     display: none;
-    flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
+  .panel-about.mobile-tab-active,
   .panel-toolbox.mobile-tab-active,
   .panel-saved.mobile-tab-active,
   .panel-output.mobile-tab-active {
     display: block;
   }
 
-  .sidebar .section-title {
-    margin-top: 0;
+  .panel-toolbox.mobile-tab-active,
+  .panel-saved.mobile-tab-active,
+  .panel-output.mobile-tab-active {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .panel-about.mobile-tab-active {
+    flex: 0 0 auto;
+    max-height: 26vh;
+    overflow-y: auto;
   }
 }
 
