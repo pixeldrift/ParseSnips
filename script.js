@@ -422,7 +422,7 @@
       kind: "container",
       category: "logic",
       label: "not:",
-      icon: "¬",
+      icon: "!",
       childJoin: "concat",
       wrap: (inner) => negateBase(inner),
     },
