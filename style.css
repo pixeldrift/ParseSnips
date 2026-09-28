@@ -293,11 +293,11 @@ body {
      separate floating field below it: pull it flush against the
      Workbench (cancelling the panel's own gap) and square off the
      seam between them. */
-  .panel-workbench .regex-row {
+  .panel-workbench .pattern-row {
     margin-top: -6px;
   }
 
-  .panel-workbench .regex-field {
+  .panel-workbench #regexOutput {
     border-top: none;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
@@ -1150,6 +1150,29 @@ input.field-input.char-input {
 }
 
 /* Regex string row */
+
+.regex-flavor-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #777;
+  white-space: nowrap;
+}
+
+.regex-flavor-select {
+  font-family: inherit;
+  font-size: 12px;
+  color: #333;
+  padding: 2px 4px;
+  border: 1px solid #999;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.replacement-section {
+  margin-top: 14px;
+}
 
 .regex-row {
   display: flex;

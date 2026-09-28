@@ -34,6 +34,13 @@
         advanced logic necessary. Simply drag criteria blocks from your Toolbox to the Workbench in order to generate
         your RegEx string and preview the results in real time.
       </p>
+      <p class="about">
+        Patterns are built as <strong>JavaScript (ECMAScript)</strong> regex, which is previewed live against your
+        text using the browser's own regex engine. The pattern itself already reads identically in PCRE, Python's
+        <code>re</code>, .NET and Java too -- the one place syntax actually differs by engine is the replacement
+        text's backreference style, which you can switch near the "Replacement text" field once you add a
+        "replace with:" block.
+      </p>
     </section>
 
     <section class="panel panel-workbench" id="workbenchPanel">
@@ -54,8 +61,17 @@
         <div class="workbench-placeholder">Drag blocks here to build your pattern</div>
       </div>
 
-      <h2 class="section-title">Regex string:</h2>
-      <div class="regex-row">
+      <div class="section-header-row">
+        <h2 class="section-title">Regex string:</h2>
+        <label class="regex-flavor-label">
+          Syntax:
+          <select id="regexFlavorSelect" class="regex-flavor-select" title="This tool always builds JavaScript (ECMAScript) regex -- the pattern itself already works as-is in PCRE, Python, .NET and Java too. This only changes how the replacement text below is written, since that's the one part whose syntax actually differs by engine.">
+            <option value="js">JavaScript</option>
+            <option value="backslash">Python / PCRE / grep / sed</option>
+          </select>
+        </label>
+      </div>
+      <div class="regex-row pattern-row">
         <div class="regex-field-wrap">
           <input id="regexOutput" class="regex-field" type="text" placeholder="Regex code" spellcheck="false" />
           <button id="reloadBtn" class="field-icon-btn field-icon-btn-reload" type="button" title="Parse this text back into blocks">
@@ -68,6 +84,18 @@
         <button id="rebuildBtn" class="copy-btn" type="button" title="Parse this text back into blocks">Rebuild blocks</button>
       </div>
       <div id="regexParseError" class="parse-error"></div>
+
+      <div id="replacementSection" class="replacement-section" hidden>
+        <h2 class="section-title">Replacement text:</h2>
+        <div class="regex-row">
+          <div class="regex-field-wrap">
+            <input id="replacementOutput" class="regex-field" type="text" readonly spellcheck="false" />
+            <button id="replacementCopyBtn" class="field-icon-btn" type="button" title="Copy to clipboard">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <nav class="mobile-tab-bar" id="mobileTabBar" role="tablist" aria-label="Panels">
