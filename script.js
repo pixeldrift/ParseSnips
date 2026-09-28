@@ -1009,8 +1009,28 @@
   const bookmarksBoxEl = document.getElementById("bookmarksBox");
   const bookmarkBtn = document.getElementById("bookmarkBtn");
   const outputModeSwitchEl = document.getElementById("outputModeSwitch");
+  const regexFlavorSelectEl = document.getElementById("regexFlavorSelect");
+  const replacementSectionEl = document.getElementById("replacementSection");
+  const replacementOutputEl = document.getElementById("replacementOutput");
+  const replacementCopyBtn = document.getElementById("replacementCopyBtn");
 
   let outputMode = "highlight"; // 'highlight' | 'onlyMatches' | 'removed'
+  // Only the *replacement* text's backreference syntax actually differs
+  // by engine for anything this tool can build -- the search pattern
+  // itself (non-capturing groups, \d/\w/\s, quantifiers, lookaround)
+  // already reads identically in PCRE, Python's re, .NET and Java, so
+  // there's nothing to change there. 'js' -> $1, $2, ...; 'backslash'
+  // -> \1, \2, ... (Python, PCRE tools, grep, sed).
+  let regexFlavor = "js";
+
+  // jsReplacement is always the canonical $-form computed for the live
+  // preview's own text.replace() call (which requires that exact
+  // syntax) -- this only reformats a *display* copy for the other
+  // flavor, never the value actually used to run the preview.
+  function formatReplacementForFlavor(jsReplacement, flavor) {
+    if (flavor !== "backslash") return jsReplacement;
+    return jsReplacement.replace(/\$(\$|\d+)/g, (_, g1) => (g1 === "$" ? "$" : "\\" + g1));
+  }
 
   workbenchEl.classList.add("dropzone");
   workbenchEl.dataset.owner = "root";
@@ -1623,6 +1643,16 @@
     }
   }
 
+  function updateReplacementDisplay(jsReplacement) {
+    if (!jsReplacement) {
+      replacementSectionEl.hidden = true;
+      replacementOutputEl.value = "";
+      return;
+    }
+    replacementSectionEl.hidden = false;
+    replacementOutputEl.value = formatReplacementForFlavor(jsReplacement, regexFlavor);
+  }
+
   function recompute() {
     let result;
     let patternError = null;
@@ -1632,6 +1662,8 @@
       patternError = e.message;
       result = { pattern: "", replacement: null };
     }
+
+    updateReplacementDisplay(result.replacement);
 
     regexOutputEl.classList.remove("error");
     if (patternError) {
@@ -2159,6 +2191,14 @@
   outputCopyIconBtn.addEventListener("click", () =>
     copyToClipboard(outputBoxEl.textContent, outputCopyIconBtn)
   );
+  replacementCopyBtn.addEventListener("click", () =>
+    copyToClipboard(replacementOutputEl.value, replacementCopyBtn)
+  );
+
+  regexFlavorSelectEl.addEventListener("change", () => {
+    regexFlavor = regexFlavorSelectEl.value;
+    recompute();
+  });
 
   // -- reverse parsing: rebuild the block tree from edited regex text ----
 
