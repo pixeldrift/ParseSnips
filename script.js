@@ -996,6 +996,12 @@
 
   const toolboxEl = document.getElementById("toolbox");
   const workbenchEl = document.getElementById("workbench");
+  const workbenchSizerEl = document.getElementById("workbenchSizer");
+  const workbenchZoomEl = document.getElementById("workbenchZoom");
+  const zoomOutBtn = document.getElementById("zoomOutBtn");
+  const zoomInBtn = document.getElementById("zoomInBtn");
+  const zoomFitBtn = document.getElementById("zoomFitBtn");
+  const zoomLevelLabel = document.getElementById("zoomLevelLabel");
   const regexOutputEl = document.getElementById("regexOutput");
   const textInputEl = document.getElementById("textInput");
   const outputBoxEl = document.getElementById("outputBox");
@@ -1013,6 +1019,37 @@
   const replacementSectionEl = document.getElementById("replacementSection");
   const replacementOutputEl = document.getElementById("replacementOutput");
   const replacementCopyBtn = document.getElementById("replacementCopyBtn");
+  const confirmDeleteDialogEl = document.getElementById("confirmDeleteDialog");
+  const confirmDeleteMessageEl = document.getElementById("confirmDeleteMessage");
+  const confirmDeleteCancelBtn = document.getElementById("confirmDeleteCancelBtn");
+  const confirmDeleteConfirmBtn = document.getElementById("confirmDeleteConfirmBtn");
+
+  // Generic yes/no confirmation for a destructive action. onConfirm only
+  // fires if the Delete button was actually clicked -- Cancel, Escape, and
+  // clicking the backdrop all just close the dialog via its native "close"
+  // event, which is also where both listeners get torn down so a later,
+  // unrelated confirmDelete() call can't accidentally fire a stale one.
+  function confirmDelete(message, onConfirm) {
+    confirmDeleteMessageEl.textContent = message;
+    let confirmed = false;
+    function onConfirmClick() {
+      confirmed = true;
+      confirmDeleteDialogEl.close();
+    }
+    function onClose() {
+      confirmDeleteDialogEl.removeEventListener("close", onClose);
+      confirmDeleteConfirmBtn.removeEventListener("click", onConfirmClick);
+      if (confirmed) onConfirm();
+    }
+    confirmDeleteConfirmBtn.addEventListener("click", onConfirmClick);
+    confirmDeleteDialogEl.addEventListener("close", onClose);
+    confirmDeleteDialogEl.showModal();
+  }
+
+  confirmDeleteCancelBtn.addEventListener("click", () => confirmDeleteDialogEl.close());
+  confirmDeleteDialogEl.addEventListener("click", (e) => {
+    if (e.target === confirmDeleteDialogEl) confirmDeleteDialogEl.close();
+  });
 
   let outputMode = "highlight"; // 'highlight' | 'onlyMatches' | 'removed'
   // Only the *replacement* text's backreference syntax actually differs
@@ -1032,8 +1069,8 @@
     return jsReplacement.replace(/\$(\$|\d+)/g, (_, g1) => (g1 === "$" ? "$" : "\\" + g1));
   }
 
-  workbenchEl.classList.add("dropzone");
-  workbenchEl.dataset.owner = "root";
+  workbenchZoomEl.classList.add("dropzone");
+  workbenchZoomEl.dataset.owner = "root";
 
   function labelParts(def) {
     const parts = [];
@@ -1107,6 +1144,13 @@
   const FOLDER_ICON_SVG =
     '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>';
+  const PENCIL_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  const TRASH_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
+    '<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
 
   function renderGroupHeader(headerEl, inst) {
     const icon = document.createElement("span");
@@ -1446,16 +1490,16 @@
   }
 
   function renderWorkbench() {
-    workbenchEl.innerHTML = "";
+    workbenchZoomEl.innerHTML = "";
     bookmarkBtn.disabled = workbenchState.length === 0;
     if (workbenchState.length === 0) {
       const placeholder = document.createElement("div");
       placeholder.className = "workbench-placeholder";
       placeholder.textContent = "Drag or tap blocks to build your pattern";
-      workbenchEl.appendChild(placeholder);
+      workbenchZoomEl.appendChild(placeholder);
       return;
     }
-    workbenchState.forEach((inst) => workbenchEl.appendChild(renderNode(inst)));
+    workbenchState.forEach((inst) => workbenchZoomEl.appendChild(renderNode(inst)));
   }
 
   // ---------------------------------------------------------------------
@@ -1468,6 +1512,11 @@
   let bookmarks = [];
   let bookmarkUidCounter = 0;
   let bookmarkNameCounter = 0;
+  // Which bookmark (if any) currently shows its name as an editable
+  // input instead of plain text -- only set via the pencil button (or
+  // right after a fresh save), so an ordinary tap/drag anywhere else on
+  // the row never falls into rename mode by accident.
+  let editingBookmarkId = null;
 
   const SEED_BOOKMARKS = [
     { name: "Email address", pattern: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}" },
@@ -1504,28 +1553,67 @@
     chip.className = "bookmark-chip cat-bookmark";
     chip.dataset.bookmarkId = bm.id;
 
-    const nameInput = document.createElement("input");
-    nameInput.type = "text";
-    nameInput.className = "bookmark-name-input";
-    nameInput.value = bm.name;
-    nameInput.addEventListener("pointerdown", (e) => e.stopPropagation());
-    nameInput.addEventListener("input", () => {
-      bm.name = nameInput.value;
-      bm.tree.fields.name = nameInput.value;
-    });
-    chip.appendChild(nameInput);
+    const nameRow = document.createElement("div");
+    nameRow.className = "bookmark-name-row";
+
+    if (editingBookmarkId === bm.id) {
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "bookmark-name-input";
+      nameInput.value = bm.name;
+      nameInput.addEventListener("pointerdown", (e) => e.stopPropagation());
+      nameInput.addEventListener("input", () => {
+        bm.name = nameInput.value;
+        bm.tree.fields.name = nameInput.value;
+      });
+      nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") nameInput.blur();
+      });
+      nameInput.addEventListener("blur", () => {
+        editingBookmarkId = null;
+        renderBookmarks();
+      });
+      nameRow.appendChild(nameInput);
+    } else {
+      const nameText = document.createElement("span");
+      nameText.className = "bookmark-name-text";
+      nameText.textContent = bm.name;
+      nameRow.appendChild(nameText);
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "bookmark-edit-btn";
+      editBtn.title = "Rename";
+      editBtn.innerHTML = PENCIL_ICON_SVG;
+      editBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+      editBtn.addEventListener("click", () => {
+        editingBookmarkId = bm.id;
+        renderBookmarks();
+        focusBookmarkName(bm.id);
+      });
+      nameRow.appendChild(editBtn);
+    }
+
+    chip.appendChild(nameRow);
 
     const caption = document.createElement("div");
     caption.className = "bookmark-pattern-caption";
     caption.textContent = bm.pattern;
     chip.appendChild(caption);
 
-    chip.appendChild(
-      makeRemoveButton(() => {
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "bookmark-delete-btn";
+    deleteBtn.title = "Delete";
+    deleteBtn.innerHTML = TRASH_ICON_SVG;
+    deleteBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    deleteBtn.addEventListener("click", () => {
+      confirmDelete("Are you sure you want to delete this saved pattern?", () => {
         bookmarks = bookmarks.filter((x) => x.id !== bm.id);
         renderBookmarks();
-      })
-    );
+      });
+    });
+    chip.appendChild(deleteBtn);
 
     return chip;
   }
@@ -1608,6 +1696,7 @@
 
     flyToBookmarks(originRect, () => {
       bookmarks.push(entry);
+      if (!hadName) editingBookmarkId = entry.id;
       renderBookmarks();
       if (!hadName) focusBookmarkName(entry.id);
     });
@@ -1643,6 +1732,89 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Workbench zoom. The pattern lives in #workbenchZoom, which is laid out
+  // at its natural (unscaled) size and then shrunk with a CSS transform;
+  // transforms don't affect layout, so #workbenchSizer is sized by hand to
+  // the *scaled* footprint (clipping the unscaled layout box so it can't
+  // leave phantom scroll room behind). That keeps #workbench's own
+  // scrollbars honest on both axes -- deep nesting makes a pattern wide,
+  // not just tall -- and a plain scroll container still pans whatever
+  // doesn't fit.
+  // ---------------------------------------------------------------------
+
+  const ZOOM_MIN = 0.3;
+  const ZOOM_MAX = 1;
+  const ZOOM_STEP = 0.1;
+  const SIZER_PAD = 8; // must match .workbench-sizer's padding in style.css
+  let workbenchZoom = 1;
+
+  function workbenchAvailWidth() {
+    const cs = getComputedStyle(workbenchEl);
+    return Math.max(
+      0,
+      workbenchEl.clientWidth -
+        parseFloat(cs.paddingLeft) -
+        parseFloat(cs.paddingRight) -
+        SIZER_PAD * 2
+    );
+  }
+
+  function syncWorkbenchZoom() {
+    workbenchZoomEl.style.setProperty("--wb-avail", workbenchAvailWidth() + "px");
+    workbenchZoomEl.style.setProperty("--wb-scale", workbenchZoom);
+    const w = workbenchZoomEl.scrollWidth;
+    const h = workbenchZoomEl.scrollHeight;
+    // Content that fits (give or take a rounding pixel) takes exactly the
+    // box's width -- no stray sliver of horizontal scroll.
+    const availW = workbenchAvailWidth();
+    const scaledW = w * workbenchZoom;
+    const sizerW = scaledW <= availW + 1 ? availW : Math.ceil(scaledW) + 1;
+    workbenchSizerEl.style.width = sizerW + SIZER_PAD * 2 + "px";
+    workbenchSizerEl.style.height = Math.ceil(h * workbenchZoom) + 1 + SIZER_PAD * 2 + "px";
+    zoomLevelLabel.textContent = Math.round(workbenchZoom * 100) + "%";
+    zoomOutBtn.disabled = workbenchZoom <= ZOOM_MIN + 1e-9;
+    zoomInBtn.disabled = workbenchZoom >= ZOOM_MAX - 1e-9;
+  }
+
+  function setWorkbenchZoom(value) {
+    workbenchZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+    syncWorkbenchZoom();
+  }
+
+  // Largest zoom (floored to a whole percent) at which the entire pattern
+  // fits the visible box -- both axes on the phone layout, where the box
+  // has a fixed height; width only on desktop, where the box simply
+  // grows to fit its content's height.
+  function fitWorkbenchZoom() {
+    workbenchZoom = 1;
+    syncWorkbenchZoom();
+    const cs = getComputedStyle(workbenchEl);
+    const availW = workbenchAvailWidth();
+    const availH =
+      workbenchEl.clientHeight -
+      parseFloat(cs.paddingTop) -
+      parseFloat(cs.paddingBottom) -
+      SIZER_PAD * 2;
+    const naturalW = workbenchZoomEl.scrollWidth || 1;
+    const naturalH = workbenchZoomEl.scrollHeight || 1;
+    // 2px of slack for the sizer's own rounding so a fit never leaves a
+    // sliver of scrollbar.
+    let fit = Math.min(1, (availW - 2) / naturalW);
+    if (window.matchMedia("(max-width: 860px)").matches) {
+      fit = Math.min(fit, (availH - 2) / naturalH);
+    }
+    setWorkbenchZoom(Math.floor(fit * 100) / 100);
+    workbenchEl.scrollTop = 0;
+    workbenchEl.scrollLeft = 0;
+  }
+
+  zoomOutBtn.addEventListener("click", () => setWorkbenchZoom(workbenchZoom - ZOOM_STEP));
+  zoomInBtn.addEventListener("click", () => setWorkbenchZoom(workbenchZoom + ZOOM_STEP));
+  zoomFitBtn.addEventListener("click", fitWorkbenchZoom);
+  window.addEventListener("resize", syncWorkbenchZoom);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncWorkbenchZoom);
+
   function updateReplacementDisplay(jsReplacement) {
     if (!jsReplacement) {
       replacementSectionEl.hidden = true;
@@ -1654,6 +1826,7 @@
   }
 
   function recompute() {
+    syncWorkbenchZoom();
     let result;
     let patternError = null;
     try {
@@ -1832,7 +2005,7 @@
     // as a drop onto it regardless of what's drawn on top at that pixel.
     const wbRect = workbenchEl.getBoundingClientRect();
     if (x >= wbRect.left && x <= wbRect.right && y >= wbRect.top && y <= wbRect.bottom) {
-      return workbenchEl;
+      return workbenchZoomEl;
     }
     return null;
   }
@@ -1902,6 +2075,9 @@
       .querySelectorAll(".dropzone.drag-over")
       .forEach((el) => el.classList.remove("drag-over"));
     bookmarksBoxEl.classList.remove("drag-over-bookmarks");
+    // The root drop zone is a content-sized wrapper now, so light up
+    // the whole Workbench box for it rather than just that wrapper.
+    workbenchEl.classList.toggle("drag-over", dz === workbenchZoomEl);
     if (dz) dz.classList.add("drag-over");
     else if (dragMode === "move" && resolveBookmarksBox(x, y)) {
       bookmarksBoxEl.classList.add("drag-over-bookmarks");
@@ -1990,6 +2166,7 @@
     document
       .querySelectorAll(".dropzone.drag-over")
       .forEach((el) => el.classList.remove("drag-over"));
+    workbenchEl.classList.remove("drag-over");
     bookmarksBoxEl.classList.remove("drag-over-bookmarks");
     if (dragGhost) {
       dragGhost.remove();
@@ -2021,13 +2198,13 @@
     if (mode === "new" || mode === "bookmark") {
       // A tap with no movement always appends to the root workbench --
       // easier to hit than the workbench's exact bounds on a phone.
-      if (isTap && !dz) dz = workbenchEl;
+      if (isTap && !dz) dz = workbenchZoomEl;
       if (dz) {
         const targetArray =
           dz.dataset.owner === "root"
             ? workbenchState
             : findInstanceByUid(workbenchState, parseInt(dz.dataset.owner, 10)).children;
-        const insertIndex = isTap && dz === workbenchEl
+        const insertIndex = isTap && dz === workbenchZoomEl
           ? targetArray.length
           : computeInsertIndex(dz, e.clientX, e.clientY);
         if (mode === "new") {
@@ -2091,7 +2268,11 @@
   // drag/tap a saved pattern into the workbench, the same way toolbox
   // blocks work (event delegation covers bookmarks added after load)
   bookmarksBoxEl.addEventListener("pointerdown", (e) => {
-    if (e.target.tagName === "INPUT" || e.target.classList.contains("remove-btn")) {
+    if (
+      e.target.tagName === "INPUT" ||
+      e.target.closest(".bookmark-edit-btn") ||
+      e.target.closest(".bookmark-delete-btn")
+    ) {
       return;
     }
     if (e.pointerType === "mouse" && e.button !== 0) return;
