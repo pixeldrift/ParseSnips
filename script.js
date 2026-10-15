@@ -1785,8 +1785,10 @@
   // Largest zoom (floored to a whole percent) at which the entire pattern
   // fits the visible box -- both axes on the phone layout, where the box
   // has a fixed height; width only on desktop, where the box simply
-  // grows to fit its content's height.
-  function fitWorkbenchZoom() {
+  // grows to fit its content's height. widthOnly forces the desktop
+  // behavior everywhere (used when loading a Saved Pattern, which should
+  // just never be wider than the box -- tall is fine, it scrolls).
+  function fitWorkbenchZoom(widthOnly) {
     workbenchZoom = 1;
     syncWorkbenchZoom();
     const cs = getComputedStyle(workbenchEl);
@@ -1801,17 +1803,17 @@
     // 2px of slack for the sizer's own rounding so a fit never leaves a
     // sliver of scrollbar.
     let fit = Math.min(1, (availW - 2) / naturalW);
-    if (window.matchMedia("(max-width: 860px)").matches) {
+    if (!widthOnly && window.matchMedia("(max-width: 860px)").matches) {
       fit = Math.min(fit, (availH - 2) / naturalH);
     }
     setWorkbenchZoom(Math.floor(fit * 100) / 100);
-    workbenchEl.scrollTop = 0;
+    if (!widthOnly) workbenchEl.scrollTop = 0;
     workbenchEl.scrollLeft = 0;
   }
 
   zoomOutBtn.addEventListener("click", () => setWorkbenchZoom(workbenchZoom - ZOOM_STEP));
   zoomInBtn.addEventListener("click", () => setWorkbenchZoom(workbenchZoom + ZOOM_STEP));
-  zoomFitBtn.addEventListener("click", fitWorkbenchZoom);
+  zoomFitBtn.addEventListener("click", () => fitWorkbenchZoom());
   window.addEventListener("resize", syncWorkbenchZoom);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncWorkbenchZoom);
 
@@ -2194,6 +2196,7 @@
     const mode = dragMode;
     const isTap = !dragMoved;
     let dz = resolveDropzone(e.clientX, e.clientY);
+    let loadedBookmark = false;
 
     if (mode === "new" || mode === "bookmark") {
       // A tap with no movement always appends to the root workbench --
@@ -2216,7 +2219,10 @@
           targetArray.splice(insertIndex, 0, inst);
         } else {
           const bm = bookmarks.find((b) => b.id === dragBookmarkId);
-          if (bm) targetArray.splice(insertIndex, 0, cloneTree(bm.tree));
+          if (bm) {
+            targetArray.splice(insertIndex, 0, cloneTree(bm.tree));
+            loadedBookmark = true;
+          }
         }
       }
     } else if (mode === "move" && dragMoved) {
@@ -2249,6 +2255,7 @@
     endDragCleanup();
     renderWorkbench();
     recompute();
+    if (loadedBookmark) fitWorkbenchZoom(true);
     if (pendingGroupFocusUid !== null) {
       focusGroupName(pendingGroupFocusUid);
       pendingGroupFocusUid = null;
