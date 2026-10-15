@@ -1013,6 +1013,37 @@
   const replacementSectionEl = document.getElementById("replacementSection");
   const replacementOutputEl = document.getElementById("replacementOutput");
   const replacementCopyBtn = document.getElementById("replacementCopyBtn");
+  const confirmDeleteDialogEl = document.getElementById("confirmDeleteDialog");
+  const confirmDeleteMessageEl = document.getElementById("confirmDeleteMessage");
+  const confirmDeleteCancelBtn = document.getElementById("confirmDeleteCancelBtn");
+  const confirmDeleteConfirmBtn = document.getElementById("confirmDeleteConfirmBtn");
+
+  // Generic yes/no confirmation for a destructive action. onConfirm only
+  // fires if the Delete button was actually clicked -- Cancel, Escape, and
+  // clicking the backdrop all just close the dialog via its native "close"
+  // event, which is also where both listeners get torn down so a later,
+  // unrelated confirmDelete() call can't accidentally fire a stale one.
+  function confirmDelete(message, onConfirm) {
+    confirmDeleteMessageEl.textContent = message;
+    let confirmed = false;
+    function onConfirmClick() {
+      confirmed = true;
+      confirmDeleteDialogEl.close();
+    }
+    function onClose() {
+      confirmDeleteDialogEl.removeEventListener("close", onClose);
+      confirmDeleteConfirmBtn.removeEventListener("click", onConfirmClick);
+      if (confirmed) onConfirm();
+    }
+    confirmDeleteConfirmBtn.addEventListener("click", onConfirmClick);
+    confirmDeleteDialogEl.addEventListener("close", onClose);
+    confirmDeleteDialogEl.showModal();
+  }
+
+  confirmDeleteCancelBtn.addEventListener("click", () => confirmDeleteDialogEl.close());
+  confirmDeleteDialogEl.addEventListener("click", (e) => {
+    if (e.target === confirmDeleteDialogEl) confirmDeleteDialogEl.close();
+  });
 
   let outputMode = "highlight"; // 'highlight' | 'onlyMatches' | 'removed'
   // Only the *replacement* text's backreference syntax actually differs
@@ -1107,6 +1138,13 @@
   const FOLDER_ICON_SVG =
     '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>';
+  const PENCIL_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+  const TRASH_ICON_SVG =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
+    '<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
 
   function renderGroupHeader(headerEl, inst) {
     const icon = document.createElement("span");
@@ -1468,6 +1506,11 @@
   let bookmarks = [];
   let bookmarkUidCounter = 0;
   let bookmarkNameCounter = 0;
+  // Which bookmark (if any) currently shows its name as an editable
+  // input instead of plain text -- only set via the pencil button (or
+  // right after a fresh save), so an ordinary tap/drag anywhere else on
+  // the row never falls into rename mode by accident.
+  let editingBookmarkId = null;
 
   const SEED_BOOKMARKS = [
     { name: "Email address", pattern: "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}" },
@@ -1504,28 +1547,67 @@
     chip.className = "bookmark-chip cat-bookmark";
     chip.dataset.bookmarkId = bm.id;
 
-    const nameInput = document.createElement("input");
-    nameInput.type = "text";
-    nameInput.className = "bookmark-name-input";
-    nameInput.value = bm.name;
-    nameInput.addEventListener("pointerdown", (e) => e.stopPropagation());
-    nameInput.addEventListener("input", () => {
-      bm.name = nameInput.value;
-      bm.tree.fields.name = nameInput.value;
-    });
-    chip.appendChild(nameInput);
+    const nameRow = document.createElement("div");
+    nameRow.className = "bookmark-name-row";
+
+    if (editingBookmarkId === bm.id) {
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "bookmark-name-input";
+      nameInput.value = bm.name;
+      nameInput.addEventListener("pointerdown", (e) => e.stopPropagation());
+      nameInput.addEventListener("input", () => {
+        bm.name = nameInput.value;
+        bm.tree.fields.name = nameInput.value;
+      });
+      nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") nameInput.blur();
+      });
+      nameInput.addEventListener("blur", () => {
+        editingBookmarkId = null;
+        renderBookmarks();
+      });
+      nameRow.appendChild(nameInput);
+    } else {
+      const nameText = document.createElement("span");
+      nameText.className = "bookmark-name-text";
+      nameText.textContent = bm.name;
+      nameRow.appendChild(nameText);
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "bookmark-edit-btn";
+      editBtn.title = "Rename";
+      editBtn.innerHTML = PENCIL_ICON_SVG;
+      editBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+      editBtn.addEventListener("click", () => {
+        editingBookmarkId = bm.id;
+        renderBookmarks();
+        focusBookmarkName(bm.id);
+      });
+      nameRow.appendChild(editBtn);
+    }
+
+    chip.appendChild(nameRow);
 
     const caption = document.createElement("div");
     caption.className = "bookmark-pattern-caption";
     caption.textContent = bm.pattern;
     chip.appendChild(caption);
 
-    chip.appendChild(
-      makeRemoveButton(() => {
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "bookmark-delete-btn";
+    deleteBtn.title = "Delete";
+    deleteBtn.innerHTML = TRASH_ICON_SVG;
+    deleteBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    deleteBtn.addEventListener("click", () => {
+      confirmDelete("Are you sure you want to delete this saved pattern?", () => {
         bookmarks = bookmarks.filter((x) => x.id !== bm.id);
         renderBookmarks();
-      })
-    );
+      });
+    });
+    chip.appendChild(deleteBtn);
 
     return chip;
   }
@@ -1608,6 +1690,7 @@
 
     flyToBookmarks(originRect, () => {
       bookmarks.push(entry);
+      if (!hadName) editingBookmarkId = entry.id;
       renderBookmarks();
       if (!hadName) focusBookmarkName(entry.id);
     });
@@ -2091,7 +2174,11 @@
   // drag/tap a saved pattern into the workbench, the same way toolbox
   // blocks work (event delegation covers bookmarks added after load)
   bookmarksBoxEl.addEventListener("pointerdown", (e) => {
-    if (e.target.tagName === "INPUT" || e.target.classList.contains("remove-btn")) {
+    if (
+      e.target.tagName === "INPUT" ||
+      e.target.closest(".bookmark-edit-btn") ||
+      e.target.closest(".bookmark-delete-btn")
+    ) {
       return;
     }
     if (e.pointerType === "mouse" && e.button !== 0) return;

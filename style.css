@@ -584,7 +584,7 @@ body {
   flex-direction: column;
   gap: 2px;
   border-radius: 10px;
-  padding: 6px 20px 6px 10px;
+  padding: 6px 26px 6px 10px;
   position: relative;
   cursor: grab;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.6);
@@ -594,6 +594,45 @@ body {
 
 .bookmark-chip:active {
   cursor: grabbing;
+}
+
+/* Sized to its own content (not stretched across the row) so the
+   pencil button sits right next to the name, not pinned off at the
+   card's far edge -- everywhere else on the card stays a plain drag,
+   see the pointerdown delegation in script.js. */
+.bookmark-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.bookmark-name-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-edit-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: #aaa;
+  padding: 0;
+  cursor: pointer;
+}
+
+.bookmark-edit-btn:hover {
+  color: #555;
 }
 
 .bookmark-name-input {
@@ -623,29 +662,30 @@ body {
   white-space: nowrap;
 }
 
-.bookmark-chip .remove-btn {
+/* Inset within the card now (not overflowing its edge like the old
+   corner-pinned "x"), and deliberately quiet by default -- a trash
+   icon that's always shouting "delete me" is worse than one that only
+   speaks up on hover/focus, since this action is destructive and
+   confirmed via a dialog rather than instant. */
+.bookmark-delete-btn {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  border: 1px solid #ccc;
-  background: #fff;
-  color: #aaa;
-  border-radius: 50%;
-  width: 15px;
-  height: 15px;
-  font-size: 10px;
-  line-height: 13px;
-  text-align: center;
-  cursor: pointer;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: #bbb;
   padding: 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+  transition: color 0.15s;
 }
 
-.bookmark-chip .remove-btn:hover {
-  background: #c0392b;
-  border-color: #c0392b;
-  color: #fff;
+.bookmark-delete-btn:hover {
+  color: #c0392b;
 }
 
 @media (pointer: coarse) {
@@ -657,13 +697,10 @@ body {
     font-size: 11px;
   }
 
-  .bookmark-chip .remove-btn {
-    top: -8px;
-    right: -8px;
-    width: 22px;
-    height: 22px;
-    font-size: 13px;
-    line-height: 20px;
+  .bookmark-edit-btn,
+  .bookmark-delete-btn {
+    width: 26px;
+    height: 26px;
   }
 }
 
@@ -1442,4 +1479,61 @@ textarea.text-box::placeholder {
   white-space: nowrap;
   transition: left 0.5s ease-in, top 0.5s ease-in, width 0.5s ease-in,
     height 0.5s ease-in, opacity 0.5s ease-in, font-size 0.5s ease-in;
+}
+
+/* Confirmation dialog (currently just "delete this saved pattern?") --
+   a native <dialog> so showModal()/close() hand us focus trapping,
+   Escape-to-cancel, and the ::backdrop for free. */
+.confirm-dialog {
+  border: none;
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 320px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.confirm-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.confirm-dialog-message {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #333;
+  line-height: 1.4;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirm-dialog-cancel,
+.confirm-dialog-delete {
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.confirm-dialog-cancel {
+  border: 1px solid #aaa;
+  background: #f5f5f5;
+  color: #333;
+}
+
+.confirm-dialog-cancel:hover {
+  background: #e9e9e9;
+}
+
+.confirm-dialog-delete {
+  border: 1px solid #a53223;
+  background: #c0392b;
+  color: #fff;
+}
+
+.confirm-dialog-delete:hover {
+  background: #a53223;
 }
