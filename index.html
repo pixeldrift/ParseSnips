@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>ParseSnips - Visual Regex</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -47,6 +47,14 @@
       <div class="workbench-header">
         <h2 class="section-title">Workbench:</h2>
         <div class="workbench-header-actions">
+          <div class="workbench-zoom-controls" role="group" aria-label="Zoom workbench">
+            <button id="zoomOutBtn" class="zoom-btn" type="button" title="Zoom out">&minus;</button>
+            <span id="zoomLevelLabel" class="zoom-level">100%</span>
+            <button id="zoomInBtn" class="zoom-btn" type="button" title="Zoom in">+</button>
+            <button id="zoomFitBtn" class="zoom-btn" type="button" title="Fit whole pattern in view">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg>
+            </button>
+          </div>
           <button id="bookmarkBtn" class="clear-btn" type="button" title="Save the current pattern to Saved Patterns">
             <span class="btn-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"></path></svg></span>
             <span class="btn-text">Save Pattern</span>
@@ -58,7 +66,11 @@
         </div>
       </div>
       <div id="workbench" class="workbench">
-        <div class="workbench-placeholder">Drag blocks here to build your pattern</div>
+        <div id="workbenchSizer" class="workbench-sizer">
+          <div id="workbenchZoom" class="workbench-zoom">
+            <div class="workbench-placeholder">Drag blocks here to build your pattern</div>
+          </div>
+        </div>
       </div>
 
       <div class="section-header-row">

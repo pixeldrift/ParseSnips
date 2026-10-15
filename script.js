@@ -996,6 +996,12 @@
 
   const toolboxEl = document.getElementById("toolbox");
   const workbenchEl = document.getElementById("workbench");
+  const workbenchSizerEl = document.getElementById("workbenchSizer");
+  const workbenchZoomEl = document.getElementById("workbenchZoom");
+  const zoomOutBtn = document.getElementById("zoomOutBtn");
+  const zoomInBtn = document.getElementById("zoomInBtn");
+  const zoomFitBtn = document.getElementById("zoomFitBtn");
+  const zoomLevelLabel = document.getElementById("zoomLevelLabel");
   const regexOutputEl = document.getElementById("regexOutput");
   const textInputEl = document.getElementById("textInput");
   const outputBoxEl = document.getElementById("outputBox");
@@ -1063,8 +1069,8 @@
     return jsReplacement.replace(/\$(\$|\d+)/g, (_, g1) => (g1 === "$" ? "$" : "\\" + g1));
   }
 
-  workbenchEl.classList.add("dropzone");
-  workbenchEl.dataset.owner = "root";
+  workbenchZoomEl.classList.add("dropzone");
+  workbenchZoomEl.dataset.owner = "root";
 
   function labelParts(def) {
     const parts = [];
@@ -1484,16 +1490,16 @@
   }
 
   function renderWorkbench() {
-    workbenchEl.innerHTML = "";
+    workbenchZoomEl.innerHTML = "";
     bookmarkBtn.disabled = workbenchState.length === 0;
     if (workbenchState.length === 0) {
       const placeholder = document.createElement("div");
       placeholder.className = "workbench-placeholder";
       placeholder.textContent = "Drag or tap blocks to build your pattern";
-      workbenchEl.appendChild(placeholder);
+      workbenchZoomEl.appendChild(placeholder);
       return;
     }
-    workbenchState.forEach((inst) => workbenchEl.appendChild(renderNode(inst)));
+    workbenchState.forEach((inst) => workbenchZoomEl.appendChild(renderNode(inst)));
   }
 
   // ---------------------------------------------------------------------
@@ -1726,6 +1732,89 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Workbench zoom. The pattern lives in #workbenchZoom, which is laid out
+  // at its natural (unscaled) size and then shrunk with a CSS transform;
+  // transforms don't affect layout, so #workbenchSizer is sized by hand to
+  // the *scaled* footprint (clipping the unscaled layout box so it can't
+  // leave phantom scroll room behind). That keeps #workbench's own
+  // scrollbars honest on both axes -- deep nesting makes a pattern wide,
+  // not just tall -- and a plain scroll container still pans whatever
+  // doesn't fit.
+  // ---------------------------------------------------------------------
+
+  const ZOOM_MIN = 0.3;
+  const ZOOM_MAX = 1;
+  const ZOOM_STEP = 0.1;
+  const SIZER_PAD = 8; // must match .workbench-sizer's padding in style.css
+  let workbenchZoom = 1;
+
+  function workbenchAvailWidth() {
+    const cs = getComputedStyle(workbenchEl);
+    return Math.max(
+      0,
+      workbenchEl.clientWidth -
+        parseFloat(cs.paddingLeft) -
+        parseFloat(cs.paddingRight) -
+        SIZER_PAD * 2
+    );
+  }
+
+  function syncWorkbenchZoom() {
+    workbenchZoomEl.style.setProperty("--wb-avail", workbenchAvailWidth() + "px");
+    workbenchZoomEl.style.setProperty("--wb-scale", workbenchZoom);
+    const w = workbenchZoomEl.scrollWidth;
+    const h = workbenchZoomEl.scrollHeight;
+    // Content that fits (give or take a rounding pixel) takes exactly the
+    // box's width -- no stray sliver of horizontal scroll.
+    const availW = workbenchAvailWidth();
+    const scaledW = w * workbenchZoom;
+    const sizerW = scaledW <= availW + 1 ? availW : Math.ceil(scaledW) + 1;
+    workbenchSizerEl.style.width = sizerW + SIZER_PAD * 2 + "px";
+    workbenchSizerEl.style.height = Math.ceil(h * workbenchZoom) + 1 + SIZER_PAD * 2 + "px";
+    zoomLevelLabel.textContent = Math.round(workbenchZoom * 100) + "%";
+    zoomOutBtn.disabled = workbenchZoom <= ZOOM_MIN + 1e-9;
+    zoomInBtn.disabled = workbenchZoom >= ZOOM_MAX - 1e-9;
+  }
+
+  function setWorkbenchZoom(value) {
+    workbenchZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+    syncWorkbenchZoom();
+  }
+
+  // Largest zoom (floored to a whole percent) at which the entire pattern
+  // fits the visible box -- both axes on the phone layout, where the box
+  // has a fixed height; width only on desktop, where the box simply
+  // grows to fit its content's height.
+  function fitWorkbenchZoom() {
+    workbenchZoom = 1;
+    syncWorkbenchZoom();
+    const cs = getComputedStyle(workbenchEl);
+    const availW = workbenchAvailWidth();
+    const availH =
+      workbenchEl.clientHeight -
+      parseFloat(cs.paddingTop) -
+      parseFloat(cs.paddingBottom) -
+      SIZER_PAD * 2;
+    const naturalW = workbenchZoomEl.scrollWidth || 1;
+    const naturalH = workbenchZoomEl.scrollHeight || 1;
+    // 2px of slack for the sizer's own rounding so a fit never leaves a
+    // sliver of scrollbar.
+    let fit = Math.min(1, (availW - 2) / naturalW);
+    if (window.matchMedia("(max-width: 860px)").matches) {
+      fit = Math.min(fit, (availH - 2) / naturalH);
+    }
+    setWorkbenchZoom(Math.floor(fit * 100) / 100);
+    workbenchEl.scrollTop = 0;
+    workbenchEl.scrollLeft = 0;
+  }
+
+  zoomOutBtn.addEventListener("click", () => setWorkbenchZoom(workbenchZoom - ZOOM_STEP));
+  zoomInBtn.addEventListener("click", () => setWorkbenchZoom(workbenchZoom + ZOOM_STEP));
+  zoomFitBtn.addEventListener("click", fitWorkbenchZoom);
+  window.addEventListener("resize", syncWorkbenchZoom);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncWorkbenchZoom);
+
   function updateReplacementDisplay(jsReplacement) {
     if (!jsReplacement) {
       replacementSectionEl.hidden = true;
@@ -1737,6 +1826,7 @@
   }
 
   function recompute() {
+    syncWorkbenchZoom();
     let result;
     let patternError = null;
     try {
@@ -1915,7 +2005,7 @@
     // as a drop onto it regardless of what's drawn on top at that pixel.
     const wbRect = workbenchEl.getBoundingClientRect();
     if (x >= wbRect.left && x <= wbRect.right && y >= wbRect.top && y <= wbRect.bottom) {
-      return workbenchEl;
+      return workbenchZoomEl;
     }
     return null;
   }
@@ -1985,6 +2075,9 @@
       .querySelectorAll(".dropzone.drag-over")
       .forEach((el) => el.classList.remove("drag-over"));
     bookmarksBoxEl.classList.remove("drag-over-bookmarks");
+    // The root drop zone is a content-sized wrapper now, so light up
+    // the whole Workbench box for it rather than just that wrapper.
+    workbenchEl.classList.toggle("drag-over", dz === workbenchZoomEl);
     if (dz) dz.classList.add("drag-over");
     else if (dragMode === "move" && resolveBookmarksBox(x, y)) {
       bookmarksBoxEl.classList.add("drag-over-bookmarks");
@@ -2073,6 +2166,7 @@
     document
       .querySelectorAll(".dropzone.drag-over")
       .forEach((el) => el.classList.remove("drag-over"));
+    workbenchEl.classList.remove("drag-over");
     bookmarksBoxEl.classList.remove("drag-over-bookmarks");
     if (dragGhost) {
       dragGhost.remove();
@@ -2104,13 +2198,13 @@
     if (mode === "new" || mode === "bookmark") {
       // A tap with no movement always appends to the root workbench --
       // easier to hit than the workbench's exact bounds on a phone.
-      if (isTap && !dz) dz = workbenchEl;
+      if (isTap && !dz) dz = workbenchZoomEl;
       if (dz) {
         const targetArray =
           dz.dataset.owner === "root"
             ? workbenchState
             : findInstanceByUid(workbenchState, parseInt(dz.dataset.owner, 10)).children;
-        const insertIndex = isTap && dz === workbenchEl
+        const insertIndex = isTap && dz === workbenchZoomEl
           ? targetArray.length
           : computeInsertIndex(dz, e.clientX, e.clientY);
         if (mode === "new") {
